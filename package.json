@@ -1,0 +1,10 @@
+{
+  "name": "sankofa",
+  "version": "0.1.0",
+  "description": "An ancestry discovery companion built for the specific challenges of Black American genealogy.",
+  "private": true,
+  "scripts": {
+    "dev": "npx serve ."
+  },
+  "license": "MIT"
+}

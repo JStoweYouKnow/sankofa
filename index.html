@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sankofa — Ancestry Discovery Companion</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app">
+  <div class="rail">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div class="brand-name">Sankofa</div>
+      <div class="brand-tag">"Se wo were fi na wosankofa a yenkyi" — go back and get it. An ancestry discovery tool built for the specific challenges of Black American family history.</div>
+    </div>
+    <div class="nav">
+      <div class="nav-item active" data-view="tree"><span class="nav-num">01</span> Family Tree</div>
+      <div class="nav-item" data-view="log"><span class="nav-num">02</span> Research Log</div>
+      <div class="nav-item" data-view="toolkit"><span class="nav-num">03</span> Discovery</div>
+      <div class="nav-item" data-view="guide"><span class="nav-num">04</span> Field Guide</div>
+    </div>
+    <div class="rail-footer">
+      <div id="saveStatus">Saved</div>
+      <div style="margin-top:4px;">Data is stored privately for you and isn't shared.</div>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- ===== FAMILY TREE ===== -->
+    <div class="view active" id="view-tree">
+      <div class="view-head">
+        <div>
+          <div class="view-eyebrow">Record 01</div>
+          <h1 class="view-title">Family Tree</h1>
+          <div class="view-sub">Every entry is a claim that needs evidence. Add ancestors as you confirm them, and link each one to the research that backs them up.</div>
+        </div>
+        <button class="btn" onclick="openPersonForm()">+ Add a person</button>
+      </div>
+      <div id="treeContent"></div>
+    </div>
+
+    <!-- ===== RESEARCH LOG ===== -->
+    <div class="view" id="view-log">
+      <div class="view-head">
+        <div>
+          <div class="view-eyebrow">Record 02</div>
+          <h1 class="view-title">Research Log</h1>
+          <div class="view-sub">Track every source you check — what you searched, what you found (or didn't), and where to pick up next. This is how loose leads become a verified line.</div>
+        </div>
+        <button class="btn" onclick="openLogForm()">+ Log a source</button>
+      </div>
+      <div class="filters">
+        <select id="filterPerson" onchange="renderLog()"><option value="">All people</option></select>
+        <select id="filterStatus" onchange="renderLog()">
+          <option value="">All statuses</option>
+          <option value="to-research">To research</option>
+          <option value="promising">Promising lead</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="dead-end">Dead end</option>
+        </select>
+      </div>
+      <div id="logContent"></div>
+    </div>
+
+    <!-- ===== DISCOVERY ===== -->
+    <div class="view" id="view-toolkit">
+      <div class="view-head">
+        <div>
+          <div class="view-eyebrow">Record 03</div>
+          <h1 class="view-title">Discovery</h1>
+          <div class="view-sub">Search runs right here. Connect a free key from the Smithsonian and the National Archives and Sankofa queries their real catalogs directly — anything it can't query directly, it hands you a working link to instead.</div>
+        </div>
+        <button class="btn btn-ghost" id="keysToggleBtn" onclick="toggleKeysPanel()">Connect data sources</button>
+      </div>
+
+      <div class="keys-panel" id="keysPanel" style="display:none;">
+        <div class="keys-row">
+          <div class="key-field">
+            <label for="keySmithsonian">Smithsonian Open Access API key</label>
+            <input id="keySmithsonian" type="text" placeholder="Paste your api.data.gov key">
+            <div class="field-hint">Free, instant signup at <a href="https://api.data.gov/signup/" target="_blank" rel="noopener">api.data.gov/signup</a>. Powers live search of the NMAAHC's collections, including Freedmen's Bureau material.</div>
+            <div class="key-status" id="statusSmithsonian"><span class="key-dot"></span> Not connected</div>
+          </div>
+          <div class="key-field">
+            <label for="keyNara">National Archives Catalog API key</label>
+            <input id="keyNara" type="text" placeholder="Paste your NARA API key">
+            <div class="field-hint">Free by email request to <a href="mailto:Catalog_API@nara.gov?subject=API%20key%20request" target="_blank" rel="noopener">Catalog_API@nara.gov</a>. Powers live search of NARA's Record Group 105 (Freedmen's Bureau) descriptions.</div>
+            <div class="key-status" id="statusNara"><span class="key-dot"></span> Not connected</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+          <button class="btn btn-small" onclick="saveKeys()">Save keys</button>
+        </div>
+      </div>
+
+      <div class="toolkit-form">
+        <div class="field">
+          <label for="tkSurname">Surname *</label>
+          <input id="tkSurname" type="text" placeholder="e.g. Stowe">
+        </div>
+        <div class="field">
+          <label for="tkState">State</label>
+          <select id="tkState"></select>
+        </div>
+        <div class="field">
+          <label for="tkCounty">County</label>
+          <input id="tkCounty" type="text" placeholder="e.g. Gaston">
+        </div>
+        <div class="field">
+          <label for="tkCity">City / town</label>
+          <input id="tkCity" type="text" placeholder="e.g. Belmont">
+        </div>
+        <div class="field full">
+          <label for="tkEnslaver">Possible enslaver surname (optional)</label>
+          <input id="tkEnslaver" type="text" placeholder="e.g. a local landowning family with the same or a related surname">
+          <div class="field-hint">Before 1870, formerly enslaved people usually appear only under the enslaver's name in records like tax lists and slave schedules — not their own. If you have a guess, it's worth searching.</div>
+        </div>
+        <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px;">
+          <button class="btn" onclick="runDiscovery()">Search</button>
+        </div>
+      </div>
+
+      <div id="toolkitResults"></div>
+    </div>
+
+    <!-- ===== FIELD GUIDE ===== -->
+    <div class="view" id="view-guide">
+      <div class="view-head">
+        <div>
+          <div class="view-eyebrow">Record 04</div>
+          <h1 class="view-title">Field Guide</h1>
+          <div class="view-sub">A short orientation to the records that matter most for Black American genealogy, and why 1870 is the wall most researchers hit first.</div>
+        </div>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§1</span> The 1870 brick wall</h3>
+        <p>The 1870 US Census is the first federal census that lists formerly enslaved Black Americans by their own full names. Before that, enslaved people were almost never named individually in official records — the 1850 and 1860 Slave Schedules list only the enslaver's name, with the people they enslaved reduced to tally marks: age, sex, and color. This is the single biggest reason Black family history research stalls before 1870, and it's not a gap in the records you're using — it's a gap in what was recorded at all.</p>
+        <div class="callout">
+          <div class="callout-title">What this means in practice</div>
+          Getting past 1870 usually requires working sideways through indirect records — Freedmen's Bureau files, Freedman's Bank registers, cohabitation/marriage records, and the enslaver's own papers (wills, estate inventories, bills of sale) — rather than a single record that names your ancestor directly.
+        </div>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§2</span> Freedmen's Bureau records (1865–1872)</h3>
+        <p>The Bureau of Refugees, Freedmen, and Abandoned Lands operated field offices across the South from 1865–1872, and its records are the richest source for the immediate post-emancipation years: labor contracts, marriage registers, hospital and ration rolls, complaint registers, and letters from freedpeople themselves searching for family members sold away from them. Records are organized by state and then by field office, not by name — so you generally need to know the county or nearest office before you can search effectively. That's what the Discovery tab is for.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§3</span> Freedman's Savings & Trust Bank records (1865–1874)</h3>
+        <p>Separate from the Bureau, the Freedman's Bank opened branches in most Southern cities and kept detailed depositor registers — often including birthplace, plantation, former enslaver's name, spouse, children, and siblings. When an ancestor's account survives, it can be the single most valuable document you find, because it's one of the few sources where a formerly enslaved person's own account of their family was recorded in their own words.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§4</span> Cohabitation records (North Carolina and other states, 1866–1868)</h3>
+        <p>After emancipation, most Southern states required formerly enslaved couples who had been living as married to formally register that marriage with the county — since slave marriages had no legal standing before the war. In North Carolina, this followed the 1866 "Act Concerning Negroes and Persons of Color," and the resulting cohabitation bonds, filed with each county's Register of Deeds, list the couple's names, ages, and how long they'd been together — and sometimes the enslaver's name and number of children. About 20,000 of these survive across 52 NC counties.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§5</span> WPA Slave Narratives (1936–1938)</h3>
+        <p>Federal Writers' Project interviewers recorded over 2,300 formerly enslaved people in the 1930s, capturing firsthand memories of specific plantations, enslavers, and family members. Coverage is uneven by county, so check neighboring counties too if your target county has none.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§6</span> Tracing through the enslaver's surname</h3>
+        <p>Many formerly enslaved people kept the surname of a former enslaver, took the name of a different prominent local family, or chose an entirely new one at emancipation — so a shared surname is a lead, not proof. Once you have a candidate enslaver, their own estate records (wills, probate inventories, tax lists, bills of sale) can list enslaved individuals by first name and sometimes age, which you can then try to match against your family's oral history and later census entries.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§7</span> DNA as a complementary tool</h3>
+        <p>Because the paper trail often breaks at 1870, DNA matching (autosomal testing plus tools that analyze shared matches) can sometimes extend a line further than documents alone, by connecting you to documented descendants of an enslaving family or to distant cousins who preserved oral history you don't have. It works best alongside the paper trail, not instead of it.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§8</span> Example: starting points for Belmont / Gaston County, NC</h3>
+        <p>To show how the pieces above fit together, here's what a real starting point looks like for one specific place — Belmont, in Gaston County, North Carolina.</p>
+        <div class="example-box">
+          <h4>Gaston County, NC — confirmed resources</h4>
+          <ul>
+            <li>Gaston County's cohabitation records survive as part of its county marriage records — start with <a href="https://www.familysearch.org/search/collection/1726957" target="_blank" rel="noopener">FamilySearch: North Carolina, County Marriages, 1762–1979</a>.</li>
+            <li>North Carolina's Freedmen's Bureau field office records (NARA microfilm M1909) are indexed and imaged at <a href="https://www.familysearch.org/en/search/collection/2143119" target="_blank" rel="noopener">FamilySearch: NC Freedmen's Bureau Field Office Records</a>. Charlotte (the nearest major field office to Gaston County) had a Freedmen's Hospital with its own patient registers.</li>
+            <li>The NC State Archives' digitized <a href="https://digital.ncdcr.gov/collections/cohabitation-records" target="_blank" rel="noopener">Cohabitation Records collection</a> covers the broader 1866–1868 statewide set, ongoing digitization.</li>
+            <li>As of recent library research, no WPA narrators were recorded from Gaston or neighboring Lincoln County specifically — worth checking bordering Mecklenburg and Cleveland counties instead.</li>
+          </ul>
+        </div>
+        <p style="margin-top:14px;">This same approach — find the county, find its surviving record types, then search each one by name — is what the Discovery tab automates for any state or county you enter.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== PERSON MODAL ===== -->
+<div class="overlay" id="personOverlay">
+  <div class="modal">
+    <button class="close-x" onclick="closeOverlay('personOverlay')">✕</button>
+    <div class="modal-title" id="personModalTitle">Add a person</div>
+    <div class="modal-sub">Only add what you can support — it's fine to leave fields blank until you find them.</div>
+    <form id="personForm" onsubmit="return savePerson(event)">
+      <input type="hidden" id="pId">
+      <div class="form-grid">
+        <div class="field full">
+          <label>Name *</label>
+          <input id="pName" required type="text" placeholder="Full name as best known">
+        </div>
+        <div class="field">
+          <label>Birth year</label>
+          <input id="pBirth" type="text" placeholder="e.g. c. 1848">
+        </div>
+        <div class="field">
+          <label>Death year</label>
+          <input id="pDeath" type="text" placeholder="e.g. 1921">
+        </div>
+        <div class="field full">
+          <label>Birthplace</label>
+          <input id="pPlace" type="text" placeholder="e.g. Belmont, Gaston County, NC">
+        </div>
+        <div class="field full">
+          <label>Associated enslaver surname (pre-1870 only, if known)</label>
+          <input id="pEnslaver" type="text" placeholder="Leave blank if not applicable">
+        </div>
+        <div class="field full">
+          <label>Parents (select any already in your tree)</label>
+          <div class="parent-picker" id="parentPicker"></div>
+        </div>
+        <div class="field full">
+          <label>Notes</label>
+          <textarea id="pNotes" rows="3" placeholder="Oral history, uncertainties, spelling variants..."></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger btn-small" id="pDeleteBtn" style="display:none;" onclick="deletePersonFromModal()">Delete person</button>
+        <div class="modal-actions-right">
+          <button type="button" class="btn btn-ghost" onclick="closeOverlay('personOverlay')">Cancel</button>
+          <button type="submit" class="btn">Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== LOG MODAL ===== -->
+<div class="overlay" id="logOverlay">
+  <div class="modal">
+    <button class="close-x" onclick="closeOverlay('logOverlay')">✕</button>
+    <div class="modal-title" id="logModalTitle">Log a source</div>
+    <div class="modal-sub">Every source, hit or miss, is worth recording — a dead end today saves you from re-searching it in a year.</div>
+    <form id="logForm" onsubmit="return saveLog(event)">
+      <input type="hidden" id="lId">
+      <div class="form-grid">
+        <div class="field">
+          <label>Date</label>
+          <input id="lDate" type="date">
+        </div>
+        <div class="field">
+          <label>Linked person</label>
+          <select id="lPerson"><option value="">Unassigned / general</option></select>
+        </div>
+        <div class="field">
+          <label>Source type</label>
+          <select id="lType">
+            <option>Freedmen's Bureau Record</option>
+            <option>Freedman's Bank Record</option>
+            <option>Cohabitation / Marriage Record</option>
+            <option>Census / Slave Schedule</option>
+            <option>WPA Slave Narrative</option>
+            <option>Vital Record</option>
+            <option>Oral History</option>
+            <option>DNA Match</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="lStatus">
+            <option value="to-research">To research</option>
+            <option value="promising">Promising lead</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="dead-end">Dead end</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label>Source name / title</label>
+          <input id="lSourceName" type="text" placeholder="e.g. NC Freedmen's Bureau Field Office Records, Charlotte">
+        </div>
+        <div class="field full">
+          <label>Citation / link</label>
+          <input id="lCitation" type="text" placeholder="URL, roll number, or full citation">
+        </div>
+        <div class="field full">
+          <label>Findings</label>
+          <textarea id="lFindings" rows="3" placeholder="What did you find, or rule out?"></textarea>
+        </div>
+        <div class="field full">
+          <label>Next steps</label>
+          <textarea id="lNext" rows="2" placeholder="What to try next"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger btn-small" id="lDeleteBtn" style="display:none;" onclick="deleteLogFromModal()">Delete entry</button>
+        <div class="modal-actions-right">
+          <button type="button" class="btn btn-ghost" onclick="closeOverlay('logOverlay')">Cancel</button>
+          <button type="submit" class="btn">Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
