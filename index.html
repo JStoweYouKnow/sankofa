@@ -19,11 +19,21 @@
       <div class="nav-item active" data-view="tree"><span class="nav-num">01</span> Family Tree</div>
       <div class="nav-item" data-view="log"><span class="nav-num">02</span> Research Log</div>
       <div class="nav-item" data-view="toolkit"><span class="nav-num">03</span> Discovery</div>
-      <div class="nav-item" data-view="guide"><span class="nav-num">04</span> Field Guide</div>
+      <div class="nav-item" data-view="plan"><span class="nav-num">04</span> Research Plan</div>
+      <div class="nav-item" data-view="guide"><span class="nav-num">05</span> Field Guide</div>
     </div>
     <div class="rail-footer">
       <div id="saveStatus">Saved</div>
-      <div style="margin-top:4px;">Data is stored privately for you and isn't shared.</div>
+      <div id="backupStatus" class="backup-status"></div>
+      <div id="syncRailStatus" class="sync-rail-status" hidden></div>
+      <div class="rail-tools">
+        <button type="button" onclick="exportJSON()">↓ Export backup (.json)</button>
+        <button type="button" onclick="exportGEDCOM()">↓ Export tree (.ged)</button>
+        <button type="button" onclick="document.getElementById('importFile').click()">↑ Import backup</button>
+        <button type="button" onclick="openSyncModal()">⇄ Family sync</button>
+      </div>
+      <div id="privacyNote" style="margin-top:8px;">Data stays in this browser unless you export a backup or turn on Family sync.</div>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none">
     </div>
   </div>
 
@@ -71,7 +81,7 @@
         <div>
           <div class="view-eyebrow">Record 03</div>
           <h1 class="view-title">Discovery</h1>
-          <div class="view-sub">Search runs right here. Connect a free key from the Smithsonian and the National Archives and Sankofa queries their real catalogs directly — anything it can't query directly, it hands you a working link to instead.</div>
+          <div class="view-sub">Search runs right here. Connect a free Smithsonian key for live U.S. Freedmen's Bureau hits — and every search also builds prefilled links into census, Bank, USCT, state archives, Caribbean, Canadian, UK, and Atlantic-trade collections where name-level records actually live.</div>
         </div>
         <button class="btn btn-ghost" id="keysToggleBtn" onclick="toggleKeysPanel()">Connect data sources</button>
       </div>
@@ -81,14 +91,8 @@
           <div class="key-field">
             <label for="keySmithsonian">Smithsonian Open Access API key</label>
             <input id="keySmithsonian" type="text" placeholder="Paste your api.data.gov key">
-            <div class="field-hint">Free, instant signup at <a href="https://api.data.gov/signup/" target="_blank" rel="noopener">api.data.gov/signup</a>. Powers live search of the NMAAHC's collections, including Freedmen's Bureau material.</div>
+            <div class="field-hint">Free, instant signup at <a href="https://api.data.gov/signup/" target="_blank" rel="noopener">api.data.gov/signup</a>. Powers live search of the Smithsonian's collections, including Freedmen's Bureau material.</div>
             <div class="key-status" id="statusSmithsonian"><span class="key-dot"></span> Not connected</div>
-          </div>
-          <div class="key-field">
-            <label for="keyNara">National Archives Catalog API key</label>
-            <input id="keyNara" type="text" placeholder="Paste your NARA API key">
-            <div class="field-hint">Free by email request to <a href="mailto:Catalog_API@nara.gov?subject=API%20key%20request" target="_blank" rel="noopener">Catalog_API@nara.gov</a>. Powers live search of NARA's Record Group 105 (Freedmen's Bureau) descriptions.</div>
-            <div class="key-status" id="statusNara"><span class="key-dot"></span> Not connected</div>
           </div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-top:14px;">
@@ -98,16 +102,25 @@
 
       <div class="toolkit-form">
         <div class="field">
+          <label for="tkGiven">Given name</label>
+          <input id="tkGiven" type="text" placeholder="e.g. Hattie">
+        </div>
+        <div class="field">
           <label for="tkSurname">Surname *</label>
           <input id="tkSurname" type="text" placeholder="e.g. Stowe">
         </div>
+        <div class="field full">
+          <label for="tkVariants">Name variants</label>
+          <input id="tkVariants" type="text" placeholder="e.g. Stow, Stoe, Stowe-Jones">
+          <div class="field-hint">Comma-separated. Emancipation-era surnames were often chosen, changed, or respelled — every spelling you've seen is worth searching.</div>
+        </div>
         <div class="field">
-          <label for="tkState">State</label>
+          <label for="tkState">Place (state / country)</label>
           <select id="tkState"></select>
         </div>
         <div class="field">
-          <label for="tkCounty">County</label>
-          <input id="tkCounty" type="text" placeholder="e.g. Gaston">
+          <label for="tkCounty">County / parish</label>
+          <input id="tkCounty" type="text" placeholder="e.g. Gaston or St. Catherine">
         </div>
         <div class="field">
           <label for="tkCity">City / town</label>
@@ -116,7 +129,7 @@
         <div class="field full">
           <label for="tkEnslaver">Possible enslaver surname (optional)</label>
           <input id="tkEnslaver" type="text" placeholder="e.g. a local landowning family with the same or a related surname">
-          <div class="field-hint">Before 1870, formerly enslaved people usually appear only under the enslaver's name in records like tax lists and slave schedules — not their own. If you have a guess, it's worth searching.</div>
+          <div class="field-hint">Before 1870 in the U.S., formerly enslaved people usually appear only under the enslaver's name in tax lists and slave schedules — not their own. In the British Caribbean, try the plantation owner in the 1817–1834 slave registers.</div>
         </div>
         <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px;">
           <button class="btn" onclick="runDiscovery()">Search</button>
@@ -126,11 +139,23 @@
       <div id="toolkitResults"></div>
     </div>
 
+    <!-- ===== RESEARCH PLAN ===== -->
+    <div class="view" id="view-plan">
+      <div class="view-head">
+        <div>
+          <div class="view-eyebrow">Record 04</div>
+          <h1 class="view-title">Research Plan</h1>
+          <div class="view-sub">The Field Guide's method, turned into steps. Pick an ancestor and work back past 1870 — every step comes with prefilled searches and one-click log entries.</div>
+        </div>
+      </div>
+      <div id="planContent"></div>
+    </div>
+
     <!-- ===== FIELD GUIDE ===== -->
     <div class="view" id="view-guide">
       <div class="view-head">
         <div>
-          <div class="view-eyebrow">Record 04</div>
+          <div class="view-eyebrow">Record 05</div>
           <h1 class="view-title">Field Guide</h1>
           <div class="view-sub">A short orientation to the records that matter most for Black American genealogy, and why 1870 is the wall most researchers hit first.</div>
         </div>
@@ -171,13 +196,23 @@
       </div>
 
       <div class="guide-section">
-        <h3><span class="gnum">§7</span> DNA as a complementary tool</h3>
-        <p>Because the paper trail often breaks at 1870, DNA matching (autosomal testing plus tools that analyze shared matches) can sometimes extend a line further than documents alone, by connecting you to documented descendants of an enslaving family or to distant cousins who preserved oral history you don't have. It works best alongside the paper trail, not instead of it.</p>
+        <h3><span class="gnum">§7</span> U.S. Colored Troops service and pension files (1863–1930s)</h3>
+        <p>Roughly 180,000 Black men served in the U.S. Colored Troops during the Civil War, and their records are among the richest in this field. Start with the free NPS Soldiers &amp; Sailors database to find a serviceman by name and unit; his compiled service record and — above all — his (or his widow's) pension file at the National Archives can run to dozens of pages of sworn testimony naming parents, spouses, children, former enslavers, and plantations. Widows' pension applications often required proving a slave marriage, so they preserve exactly the family detail no other record kept.</p>
       </div>
 
       <div class="guide-section">
-        <h3><span class="gnum">§8</span> Example: starting points for Belmont / Gaston County, NC</h3>
-        <p>To show how the pieces above fit together, here's what a real starting point looks like for one specific place — Belmont, in Gaston County, North Carolina.</p>
+        <h3><span class="gnum">§8</span> DNA as a complementary tool</h3>
+        <p>Because the paper trail often breaks at 1870 — and almost never names an African village — DNA matching (autosomal testing plus shared-match tools) is often the only way to narrow an African region. Ethnicity estimates point to areas (e.g. Nigeria, Ghana, Senegambia); matches with people who have deep paper trails in West Africa or the Caribbean can refine that further. Record company, estimates, and key matches on each person's DNA workspace. DNA works best alongside the paper trail, not instead of it — and a percentage is not a village.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§9</span> Bridging toward Africa</h3>
+        <p>You cannot usually surname-search Africa the way you search the 1870 census. The workable path is: push the American or Caribbean line as far back as documents allow → capture any “African-born,” ethnonym (Igbo, Coromantee, Congo…), ship, or port clue → use DNA for a hypothesized region → search <a href="https://www.slavevoyages.org/" target="_blank" rel="noopener">Slave Voyages</a> by coast/decade/port and <a href="https://www.slavevoyages.org/resources/african-origins" target="_blank" rel="noopener">African Origins</a> if an African given name survives. Tag every claim with confidence (documentary, DNA-supported, oral, or speculative). The Research Plan’s final step walks this sequence per ancestor.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3><span class="gnum">§10</span> Example: starting points for Belmont / Gaston County, NC</h3>
+        <p>To show how the U.S. side of the work fits together, here's what a real starting point looks like for one specific place — Belmont, in Gaston County, North Carolina.</p>
         <div class="example-box">
           <h4>Gaston County, NC — confirmed resources</h4>
           <ul>
@@ -207,6 +242,11 @@
           <label>Name *</label>
           <input id="pName" required type="text" placeholder="Full name as best known">
         </div>
+        <div class="field full">
+          <label>Name variants</label>
+          <input id="pVariants" type="text" placeholder="e.g. Hattie Stow, Harriet Stowe — comma-separated">
+          <div class="field-hint">Surnames were often chosen, changed, or respelled at emancipation — record every spelling you've seen in a record.</div>
+        </div>
         <div class="field">
           <label>Birth year</label>
           <input id="pBirth" type="text" placeholder="e.g. c. 1848">
@@ -228,8 +268,89 @@
           <div class="parent-picker" id="parentPicker"></div>
         </div>
         <div class="field full">
+          <label>Spouses (select any already in your tree)</label>
+          <div class="parent-picker" id="spousePicker"></div>
+          <div class="field-hint">The note is for the record that ties the couple — e.g. "cohabitation bond, Gaston County, 1866".</div>
+        </div>
+        <div class="field full">
           <label>Notes</label>
           <textarea id="pNotes" rows="3" placeholder="Oral history, uncertainties, spelling variants..."></textarea>
+        </div>
+
+        <div class="field full form-section-label">DNA workspace</div>
+        <div class="field">
+          <label>Testing company</label>
+          <select id="pDnaCompany">
+            <option value="">— Not tested / not entered —</option>
+            <option>AncestryDNA</option>
+            <option>23andMe</option>
+            <option>MyHeritage</option>
+            <option>FamilyTreeDNA</option>
+            <option>Living DNA</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Year tested</label>
+          <input id="pDnaYear" type="text" placeholder="e.g. 2024">
+        </div>
+        <div class="field full">
+          <label>Ethnicity estimate notes</label>
+          <textarea id="pDnaEthnicity" rows="2" placeholder="e.g. Nigeria 28%, Ghana 12%, Senegal 8% — copy the breakdown that matters"></textarea>
+        </div>
+        <div class="field full">
+          <label>Hypothesized African region (from DNA)</label>
+          <input id="pDnaRegion" type="text" placeholder="e.g. Bight of Biafra / southeastern Nigeria">
+        </div>
+        <div class="field full">
+          <label>Key African or diaspora matches</label>
+          <textarea id="pDnaMatches" rows="2" placeholder="Match name or initials, shared cM, hypothesized connection"></textarea>
+        </div>
+        <div class="field full">
+          <label>Shared segments / cluster notes</label>
+          <textarea id="pDnaSegments" rows="2" placeholder="Optional: chromosome browser or shared-match cluster notes"></textarea>
+        </div>
+
+        <div class="field full form-section-label">Bridge to Africa</div>
+        <div class="field full">
+          <label class="inline-check"><input type="checkbox" id="pAfricaBorn"> A record calls them African-born (or “born in Africa”)</label>
+        </div>
+        <div class="field">
+          <label>African given name (if known)</label>
+          <input id="pAfricaName" type="text" placeholder="From African Origins, colonial register, etc.">
+        </div>
+        <div class="field">
+          <label>Ethnonym in a record</label>
+          <select id="pEthnonym"></select>
+        </div>
+        <div class="field">
+          <label>Embarkation coast (hypothesis)</label>
+          <select id="pEmbarkCoast"></select>
+        </div>
+        <div class="field">
+          <label>Embarkation decade</label>
+          <input id="pEmbarkDecade" type="text" placeholder="e.g. 1800">
+        </div>
+        <div class="field">
+          <label>Disembarkation port / region</label>
+          <select id="pDisembark"></select>
+        </div>
+        <div class="field">
+          <label>Ship name (if known)</label>
+          <input id="pShip" type="text" placeholder="Optional">
+        </div>
+        <div class="field full">
+          <label>Oral tradition about Africa</label>
+          <textarea id="pAfricaOral" rows="2" placeholder="e.g. Grandmother said the family was 'from Guinea' — treat as a lead"></textarea>
+        </div>
+        <div class="field">
+          <label>Region claim</label>
+          <input id="pAfricaRegion" type="text" placeholder="Best current claim, e.g. Igbo / SE Nigeria">
+        </div>
+        <div class="field">
+          <label>Confidence in that claim</label>
+          <select id="pAfricaConfidence"></select>
+          <div class="field-hint">Be honest — DNA regions and ethnonyms are not village proofs.</div>
         </div>
       </div>
       <div class="modal-actions">
@@ -267,7 +388,11 @@
             <option>Freedman's Bank Record</option>
             <option>Cohabitation / Marriage Record</option>
             <option>Census / Slave Schedule</option>
+            <option>Military / Pension Record</option>
             <option>WPA Slave Narrative</option>
+            <option>Newspaper / Advertisement</option>
+            <option>Court / Petition</option>
+            <option>Ship / Voyage Record</option>
             <option>Vital Record</option>
             <option>Oral History</option>
             <option>DNA Match</option>
@@ -292,6 +417,24 @@
           <input id="lCitation" type="text" placeholder="URL, roll number, or full citation">
         </div>
         <div class="field full">
+          <label>This source is evidence for…</label>
+          <div class="supports-picker" id="supportsPicker">
+            <label><input type="checkbox" class="support-check" value="name"> Name</label>
+            <label><input type="checkbox" class="support-check" value="birth"> Birth</label>
+            <label><input type="checkbox" class="support-check" value="death"> Death</label>
+            <label><input type="checkbox" class="support-check" value="parentage"> Parentage</label>
+            <label><input type="checkbox" class="support-check" value="relationship"> Relationship</label>
+            <label><input type="checkbox" class="support-check" value="location"> Location</label>
+            <label><input type="checkbox" class="support-check" value="origin"> African origin</label>
+          </div>
+          <div class="field-hint">Mark which facts about the linked person this source supports. Confirmed sources show these on the person's card.</div>
+        </div>
+        <div class="field full">
+          <label>Confidence</label>
+          <select id="lConfidence"></select>
+          <div class="field-hint">How strong is this as evidence? Documentary beats DNA estimate beats oral tradition beats speculation.</div>
+        </div>
+        <div class="field full">
           <label>Findings</label>
           <textarea id="lFindings" rows="3" placeholder="What did you find, or rule out?"></textarea>
         </div>
@@ -311,6 +454,58 @@
   </div>
 </div>
 
+<!-- ===== IMPORT MODAL ===== -->
+<div class="overlay" id="importOverlay">
+  <div class="modal">
+    <button class="close-x" onclick="closeOverlay('importOverlay')">✕</button>
+    <div class="modal-title">Import backup</div>
+    <div class="modal-sub" id="importSummary"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeOverlay('importOverlay')">Cancel</button>
+      <div class="modal-actions-right">
+        <button type="button" class="btn btn-danger" onclick="applyImport('replace')">Replace my data</button>
+        <button type="button" class="btn" onclick="applyImport('merge')">Merge into my data</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FAMILY SYNC MODAL ===== -->
+<div class="overlay" id="syncOverlay">
+  <div class="modal">
+    <button class="close-x" onclick="closeOverlay('syncOverlay')">✕</button>
+    <div class="modal-title">Family sync</div>
+    <div class="modal-sub">Optional. Deploy the small sync endpoint in this repo once (see the README), then everyone who enters the same family code and passphrase shares one tree — edits merge, newest wins, deletions carry over.</div>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Sync endpoint URL</label>
+        <input id="syncEndpoint" type="text" placeholder="https://your-app.vercel.app/api/sync">
+      </div>
+      <div class="field">
+        <label>Family code</label>
+        <input id="syncCode" type="text" placeholder="e.g. stowe-family">
+      </div>
+      <div class="field">
+        <label>Passphrase</label>
+        <input id="syncPass" type="password" placeholder="Share only with family">
+        <div class="field-hint">The first person to sync with a code sets its passphrase.</div>
+      </div>
+    </div>
+    <div class="sync-status" id="syncStatus">Not configured — your data stays in this browser only.</div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger btn-small" onclick="disableSync()">Turn off sync</button>
+      <div class="modal-actions-right">
+        <button type="button" class="btn btn-ghost" onclick="closeOverlay('syncOverlay')">Close</button>
+        <button type="button" class="btn" onclick="saveSyncConfig()">Save &amp; sync now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/sources.js"></script>
+<script src="js/africa.js"></script>
 <script src="js/app.js"></script>
+<script src="js/plan.js"></script>
+<script src="js/sync.js"></script>
 </body>
 </html>
