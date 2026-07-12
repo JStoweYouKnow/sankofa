@@ -1,524 +1,602 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Forebear helps Black Americans trace ancestors past the 1870 brick wall — Freedmen's Bureau, Freedman's Bank, slave schedules, and Bridge to Africa. Free, private, browser-based.">
-<meta name="theme-color" content="#2C3A55">
-<title>Forebear — Ancestry Discovery Companion</title>
+<meta name="description" content="Forebear is a free ancestry research companion for Black Americans tracing family roots past the 1870 brick wall — Freedmen's Bureau, Freedman's Bank, slave schedules, and Bridge to Africa.">
+<meta name="theme-color" content="#0F0D09">
+<title>Forebear — Ancestry Discovery for Black American Families</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230F0D09' rx='4'/><text x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='18' fill='%23D4943E' font-weight='bold'>F</text></svg>">
-<link rel="stylesheet" href="css/styles.css">
-<!-- Apply saved theme before first paint to prevent flash -->
-<script>(function(){var t=localStorage.getItem('forebear-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}());</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,600&family=Inter:wght@400;500;600&family=Courier+Prime:wght@400&display=swap">
+<script>
+  // Apply saved theme before paint
+  (function(){
+    var t = localStorage.getItem('forebear-theme');
+    if (t === 'light') document.documentElement.setAttribute('data-theme','light');
+    else document.documentElement.setAttribute('data-theme','dark');
+  }());
+</script>
+<style>
+  /* ── Tokens ───────────────────────────────────────────── */
+  :root {
+    --paper:#0F0D09; --paper-mid:#15110C; --card:#1C1710; --card-raised:#241D13;
+    --ink:#EDE3CE; --ink-soft:#9A8668; --ink-faint:#5E5038;
+    --brass:#D4943E; --brass-light:#E8B84B;
+    --indigo:#5B7DB8;
+    --line:#2E2418; --line-soft:#231C11;
+    --green:#5E8A6C;
+    --nav-h:64px;
+  }
+  [data-theme="light"] {
+    --paper:#F3EBD5; --paper-mid:#EDE4C4; --card:#FDFAF0; --card-raised:#F3EBD5;
+    --ink:#1A1208; --ink-soft:#55401C; --ink-faint:#8C7050;
+    --brass:#7A520E; --brass-light:#9A6A18;
+    --indigo:#234D8A;
+    --line:#CCC0A0; --line-soft:#DDD2B4;
+    --green:#245A2C;
+  }
+
+  /* ── Reset ───────────────────────────────────────────── */
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Inter',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.6;
+  }
+  ::selection{background:rgba(212,148,58,.28);color:var(--ink);}
+  a{color:var(--brass-light);text-underline-offset:2px;}
+  img,svg{display:block;}
+
+  /* ── Layout helpers ──────────────────────────────────── */
+  .wrap{max-width:860px;margin:0 auto;padding:0 28px;}
+  .wrap-wide{max-width:1060px;margin:0 auto;padding:0 28px;}
+
+  /* ── Navigation ──────────────────────────────────────── */
+  .site-nav{
+    position:sticky;top:0;z-index:100;
+    height:var(--nav-h);
+    display:flex;align-items:center;
+    background:rgba(15,13,9,.92);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  [data-theme="light"] .site-nav{background:rgba(243,235,213,.92);}
+  .site-nav .wrap-wide{
+    display:flex;align-items:center;justify-content:space-between;
+    width:100%;
+  }
+  .nav-brand{
+    display:flex;align-items:center;gap:10px;
+    text-decoration:none;color:var(--ink);
+    font-family:'Fraunces',serif;font-size:20px;font-weight:700;
+  }
+  .nav-logo{
+    width:34px;height:34px;
+    border:1.5px solid var(--brass);border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:15px;color:var(--brass);font-weight:700;
+    box-shadow:0 0 12px rgba(212,148,58,.1);
+  }
+  .nav-right{display:flex;align-items:center;gap:14px;}
+  .nav-theme{
+    background:none;border:none;cursor:pointer;
+    font-family:'Courier Prime',monospace;font-size:11px;
+    color:var(--ink-faint);letter-spacing:.3px;
+    padding:4px;transition:color .15s;
+  }
+  .nav-theme:hover{color:var(--brass);}
+  .nav-cta{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:13px;font-weight:600;
+    color:#0A0806;background:var(--brass);
+    padding:8px 18px;border-radius:2px;
+    text-decoration:none;
+    transition:background .15s,box-shadow .15s;
+    white-space:nowrap;
+  }
+  .nav-cta:hover{background:var(--brass-light);box-shadow:0 0 16px rgba(212,148,58,.3);color:#0A0806;}
+
+  /* ── Hero ────────────────────────────────────────────── */
+  .hero{
+    min-height:calc(90vh - var(--nav-h));
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    text-align:center;
+    padding:80px 28px 64px;
+    position:relative;
+    overflow:hidden;
+  }
+  /* Subtle radial glow behind the mark */
+  .hero::before{
+    content:'';
+    position:absolute;top:0;left:50%;
+    transform:translateX(-50%);
+    width:600px;height:600px;
+    background:radial-gradient(circle at center, rgba(212,148,58,.06) 0%, transparent 70%);
+    pointer-events:none;
+  }
+  .hero-mark{
+    width:90px;height:90px;
+    border:2px solid var(--brass);border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Fraunces',serif;font-size:38px;font-weight:700;color:var(--brass);
+    margin:0 auto 36px;
+    box-shadow:0 0 40px rgba(212,148,58,.16),0 0 0 8px rgba(212,148,58,.04);
+    position:relative;z-index:1;
+  }
+  .hero-eyebrow{
+    font-family:'Courier Prime',monospace;
+    font-size:10.5px;letter-spacing:2.5px;text-transform:uppercase;
+    color:var(--brass);opacity:.7;
+    margin-bottom:18px;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .hero-eyebrow::before,.hero-eyebrow::after{
+    content:'';display:inline-block;
+    width:20px;height:1.5px;background:currentColor;
+  }
+  .hero h1{
+    font-family:'Fraunces',serif;
+    font-size:clamp(38px,6.5vw,68px);
+    font-weight:700;
+    letter-spacing:-1.5px;
+    line-height:1.06;
+    margin:0 0 28px;
+    max-width:14ch;
+  }
+  .hero-accent{color:var(--brass);}
+  .hero-sub{
+    font-size:clamp(15px,2.2vw,17px);
+    color:var(--ink-soft);
+    max-width:52ch;
+    line-height:1.7;
+    margin:0 auto 40px;
+  }
+  .hero-cta-group{
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+  }
+  .btn-primary{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:15px;font-weight:600;
+    color:#0A0806;background:var(--brass);
+    padding:14px 32px;border-radius:2px;
+    text-decoration:none;letter-spacing:.2px;
+    transition:background .15s,box-shadow .2s;
+  }
+  .btn-primary:hover{background:var(--brass-light);color:#0A0806;box-shadow:0 0 28px rgba(212,148,58,.35);}
+  .btn-arrow{font-size:17px;transition:transform .15s;}
+  .btn-primary:hover .btn-arrow{transform:translateX(3px);}
+  .hero-note{
+    font-family:'Courier Prime',monospace;
+    font-size:11px;letter-spacing:.3px;
+    color:var(--ink-faint);
+    margin-top:4px;
+  }
+
+  /* ── Divider ─────────────────────────────────────────── */
+  .section-divider{
+    border:none;
+    height:1px;
+    background:linear-gradient(90deg, transparent 0%, var(--line) 20%, var(--line) 80%, transparent 100%);
+    margin:0;
+  }
+
+  /* ── Problem band ────────────────────────────────────── */
+  .problem-band{
+    background:var(--paper-mid);
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+    padding:72px 28px;
+  }
+  .problem-band .wrap{max-width:700px;}
+  .section-eyebrow{
+    font-family:'Courier Prime',monospace;
+    font-size:10px;letter-spacing:2.5px;text-transform:uppercase;
+    color:var(--brass);opacity:.65;margin-bottom:16px;
+  }
+  .problem-band h2{
+    font-family:'Fraunces',serif;
+    font-size:clamp(26px,4vw,38px);
+    font-weight:700;letter-spacing:-.5px;
+    line-height:1.15;margin-bottom:24px;
+  }
+  .problem-band p{
+    font-size:15.5px;color:var(--ink-soft);line-height:1.75;margin-bottom:16px;
+  }
+  .problem-band p:last-child{margin-bottom:0;}
+  .problem-pull{
+    border-left:3px solid var(--brass);
+    padding:16px 20px;
+    margin:28px 0;
+    background:rgba(212,148,58,.05);
+    border-radius:0 2px 2px 0;
+  }
+  .problem-pull p{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:17px;
+    color:var(--ink);
+    line-height:1.6;
+    margin:0;
+  }
+
+  /* ── Features ────────────────────────────────────────── */
+  .features{padding:80px 28px;}
+  .features-header{text-align:center;margin-bottom:56px;}
+  .features-header h2{
+    font-family:'Fraunces',serif;
+    font-size:clamp(26px,4vw,38px);
+    font-weight:700;letter-spacing:-.5px;margin-bottom:12px;
+  }
+  .features-header p{
+    font-size:15px;color:var(--ink-soft);max-width:50ch;margin:0 auto;line-height:1.65;
+  }
+  .feature-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:2px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .feature-cell{
+    background:var(--card);
+    padding:32px 28px;
+    border:none;
+    transition:background .15s;
+  }
+  .feature-cell:hover{background:var(--card-raised);}
+  .feature-icon{
+    width:44px;height:44px;
+    border:1.5px solid rgba(212,148,58,.35);
+    border-radius:2px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;margin-bottom:18px;
+    background:rgba(212,148,58,.06);
+  }
+  .feature-cell h3{
+    font-family:'Fraunces',serif;
+    font-size:20px;font-weight:700;
+    letter-spacing:-.2px;margin-bottom:10px;
+    line-height:1.2;
+  }
+  .feature-cell p{
+    font-size:13.5px;color:var(--ink-soft);line-height:1.7;
+  }
+  .feature-tag{
+    display:inline-block;margin-top:14px;
+    font-family:'Courier Prime',monospace;
+    font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--brass);opacity:.7;
+  }
+
+  /* ── How it works ────────────────────────────────────── */
+  .how{
+    padding:72px 28px;
+    background:var(--paper-mid);
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+  .how h2{
+    font-family:'Fraunces',serif;
+    font-size:clamp(24px,3.5vw,34px);
+    font-weight:700;letter-spacing:-.4px;
+    text-align:center;margin-bottom:48px;
+  }
+  .steps{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:0;
+    position:relative;
+  }
+  .steps::before{
+    content:'';position:absolute;
+    top:22px;left:10%;right:10%;height:1px;
+    background:linear-gradient(90deg, var(--brass) 0%, rgba(212,148,58,.2) 100%);
+    z-index:0;
+  }
+  .step{
+    text-align:center;padding:0 16px;
+    position:relative;z-index:1;
+  }
+  .step-num{
+    width:44px;height:44px;
+    border:2px solid var(--brass);
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Fraunces',serif;font-size:17px;font-weight:700;
+    color:var(--brass);
+    background:var(--paper-mid);
+    margin:0 auto 16px;
+  }
+  .step h4{
+    font-family:'Fraunces',serif;
+    font-size:15px;font-weight:700;margin-bottom:8px;line-height:1.25;
+  }
+  .step p{font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
+
+  /* ── Privacy band ────────────────────────────────────── */
+  .privacy{padding:72px 28px;text-align:center;}
+  .privacy-icon{
+    font-size:32px;margin:0 auto 20px;
+    display:flex;align-items:center;justify-content:center;
+    width:64px;height:64px;
+    border:1.5px solid var(--line);border-radius:50%;
+    color:var(--ink-soft);
+  }
+  .privacy h2{
+    font-family:'Fraunces',serif;
+    font-size:clamp(22px,3vw,32px);font-weight:700;
+    letter-spacing:-.3px;margin-bottom:14px;
+  }
+  .privacy p{
+    font-size:15px;color:var(--ink-soft);
+    max-width:48ch;margin:0 auto 10px;line-height:1.7;
+  }
+  .privacy-chips{
+    display:flex;flex-wrap:wrap;gap:8px;
+    justify-content:center;margin-top:24px;
+  }
+  .privacy-chip{
+    font-family:'Courier Prime',monospace;
+    font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;
+    color:var(--ink-soft);
+    border:1px solid var(--line);
+    padding:5px 12px;border-radius:2px;
+    background:var(--card);
+  }
+
+  /* ── Final CTA ───────────────────────────────────────── */
+  .final-cta{
+    padding:96px 28px;text-align:center;
+    border-top:1px solid var(--line);
+    position:relative;overflow:hidden;
+  }
+  .final-cta::before{
+    content:'';position:absolute;
+    bottom:-100px;left:50%;transform:translateX(-50%);
+    width:600px;height:400px;
+    background:radial-gradient(circle at center, rgba(212,148,58,.05) 0%, transparent 70%);
+    pointer-events:none;
+  }
+  .final-cta-eyebrow{
+    font-family:'Courier Prime',monospace;
+    font-size:10px;letter-spacing:2.5px;text-transform:uppercase;
+    color:var(--brass);opacity:.6;margin-bottom:20px;
+  }
+  .final-cta h2{
+    font-family:'Fraunces',serif;
+    font-size:clamp(30px,5vw,52px);
+    font-weight:700;letter-spacing:-1px;line-height:1.1;
+    margin-bottom:18px;max-width:16ch;margin-left:auto;margin-right:auto;
+  }
+  .final-cta p{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:16px;color:var(--ink-soft);
+    max-width:42ch;margin:0 auto 36px;line-height:1.6;
+  }
+
+  /* ── Footer ──────────────────────────────────────────── */
+  .site-footer{
+    border-top:1px solid var(--line);
+    padding:28px;text-align:center;
+  }
+  .site-footer p{
+    font-size:12px;color:var(--ink-faint);
+    font-family:'Courier Prime',monospace;letter-spacing:.3px;
+  }
+  .site-footer a{color:var(--ink-faint);}
+  .site-footer a:hover{color:var(--brass);}
+
+  /* ── Responsive ──────────────────────────────────────── */
+  @media(max-width:700px){
+    .hero{padding:60px 20px 52px;}
+    .feature-grid{grid-template-columns:1fr;}
+    .steps{grid-template-columns:1fr 1fr;gap:32px 0;}
+    .steps::before{display:none;}
+    .problem-band,.features,.how,.privacy,.final-cta{padding-left:20px;padding-right:20px;}
+    .wrap,.wrap-wide{padding:0 20px;}
+    .nav-right .nav-theme{display:none;}
+  }
+  @media(max-width:480px){
+    .steps{grid-template-columns:1fr;}
+  }
+</style>
 </head>
 <body>
 
-<button class="rail-toggle" id="railToggle" aria-label="Open menu" aria-expanded="false">&#9776;</button>
-<div class="rail-backdrop" id="railBackdrop"></div>
-
-<div class="app">
-  <div class="rail" id="appRail">
-    <div class="brand">
-      <div class="brand-mark">F</div>
-      <div class="brand-name">Forebear</div>
-      <div class="brand-tag">"Se wo were fi na wosankofa a yenkyi" — go back and get it. An ancestry discovery tool built for the specific challenges of Black American family history.</div>
-    </div>
-    <div class="nav">
-      <div class="nav-item active" data-view="tree"><span class="nav-num">01</span> Family Tree</div>
-      <div class="nav-item" data-view="log"><span class="nav-num">02</span> Research Log</div>
-      <div class="nav-item" data-view="toolkit"><span class="nav-num">03</span> Discovery</div>
-      <div class="nav-item" data-view="plan"><span class="nav-num">04</span> Research Plan</div>
-      <div class="nav-item" data-view="guide"><span class="nav-num">05</span> Field Guide</div>
-    </div>
-    <div class="rail-footer">
-      <div id="saveStatus">Saved</div>
-      <div id="backupStatus" class="backup-status"></div>
-      <div id="syncRailStatus" class="sync-rail-status" hidden></div>
-      <div class="rail-tools">
-        <button type="button" onclick="exportJSON()">↓ Export backup (.json)</button>
-        <button type="button" onclick="exportGEDCOM()">↓ Export tree (.ged)</button>
-        <button type="button" onclick="document.getElementById('importFile').click()">↑ Import backup</button>
-        <button type="button" onclick="openSyncModal()">⇄ Family sync</button>
-      </div>
-      <div id="privacyNote" style="margin-top:8px;">Data stays in this browser unless you export a backup or turn on Family sync.</div>
-      <div class="rail-meta-row">
-        <span class="beta-badge">v0.1-beta</span>
-        <button type="button" id="themeToggle" class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle colour mode">☀ Light</button>
-        <a class="feedback-link" href="https://github.com/JStoweYouKnow/sankofa/issues/new?labels=beta-feedback&template=beta_feedback.md" target="_blank" rel="noopener">Feedback</a>
-      </div>
-      <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+<!-- ── Navigation ─────────────────────────────────── -->
+<nav class="site-nav" role="navigation" aria-label="Site navigation">
+  <div class="wrap-wide">
+    <a href="/" class="nav-brand" aria-label="Forebear home">
+      <div class="nav-logo">F</div>
+      Forebear
+    </a>
+    <div class="nav-right">
+      <button class="nav-theme" id="themeToggleLanding" onclick="toggleLandingTheme()" title="Toggle colour mode">☀ Light</button>
+      <a href="app.html" class="nav-cta">Open app <span class="btn-arrow">→</span></a>
     </div>
   </div>
+</nav>
 
-  <div class="main">
-
-    <!-- ===== FAMILY TREE ===== -->
-    <div class="view active" id="view-tree">
-      <div class="view-head">
-        <div>
-          <div class="view-eyebrow">Record 01</div>
-          <h1 class="view-title">Family Tree</h1>
-          <div class="view-sub">Every entry is a claim that needs evidence. Add ancestors as you confirm them, and link each one to the research that backs them up.</div>
-        </div>
-        <button class="btn" onclick="openPersonForm()">+ Add a person</button>
-      </div>
-      <div id="treeContent"></div>
-    </div>
-
-    <!-- ===== RESEARCH LOG ===== -->
-    <div class="view" id="view-log">
-      <div class="view-head">
-        <div>
-          <div class="view-eyebrow">Record 02</div>
-          <h1 class="view-title">Research Log</h1>
-          <div class="view-sub">Track every source you check — what you searched, what you found (or didn't), and where to pick up next. This is how loose leads become a verified line.</div>
-        </div>
-        <button class="btn" onclick="openLogForm()">+ Log a source</button>
-      </div>
-      <div class="filters">
-        <select id="filterPerson" onchange="renderLog()"><option value="">All people</option></select>
-        <select id="filterStatus" onchange="renderLog()">
-          <option value="">All statuses</option>
-          <option value="to-research">To research</option>
-          <option value="promising">Promising lead</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="dead-end">Dead end</option>
-        </select>
-      </div>
-      <div id="logContent"></div>
-    </div>
-
-    <!-- ===== DISCOVERY ===== -->
-    <div class="view" id="view-toolkit">
-      <div class="view-head">
-        <div>
-          <div class="view-eyebrow">Record 03</div>
-          <h1 class="view-title">Discovery</h1>
-          <div class="view-sub">Search runs right here. Connect a free Smithsonian key for live U.S. Freedmen's Bureau hits — and every search also builds prefilled links into census, Bank, USCT, state archives, Caribbean, Canadian, UK, and Atlantic-trade collections where name-level records actually live.</div>
-        </div>
-        <button class="btn btn-ghost" id="keysToggleBtn" onclick="toggleKeysPanel()">Connect data sources</button>
-      </div>
-
-      <div class="keys-panel" id="keysPanel" style="display:none;">
-        <div class="keys-row">
-          <div class="key-field">
-            <label for="keySmithsonian">Smithsonian Open Access API key</label>
-            <input id="keySmithsonian" type="text" placeholder="Paste your api.data.gov key">
-            <div class="field-hint">Free, instant signup at <a href="https://api.data.gov/signup/" target="_blank" rel="noopener">api.data.gov/signup</a>. Powers live search of the Smithsonian's collections, including Freedmen's Bureau material.</div>
-            <div class="key-status" id="statusSmithsonian"><span class="key-dot"></span> Not connected</div>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:flex-end;margin-top:14px;">
-          <button class="btn btn-small" onclick="saveKeys()">Save keys</button>
-        </div>
-      </div>
-
-      <div class="toolkit-form">
-        <div class="field">
-          <label for="tkGiven">Given name</label>
-          <input id="tkGiven" type="text" placeholder="e.g. Hattie">
-        </div>
-        <div class="field">
-          <label for="tkSurname">Surname *</label>
-          <input id="tkSurname" type="text" placeholder="e.g. Stowe">
-        </div>
-        <div class="field full">
-          <label for="tkVariants">Name variants</label>
-          <input id="tkVariants" type="text" placeholder="e.g. Stow, Stoe, Stowe-Jones">
-          <div class="field-hint">Comma-separated. Emancipation-era surnames were often chosen, changed, or respelled — every spelling you've seen is worth searching.</div>
-        </div>
-        <div class="field">
-          <label for="tkState">Place (state / country)</label>
-          <select id="tkState"></select>
-        </div>
-        <div class="field">
-          <label for="tkCounty">County / parish</label>
-          <input id="tkCounty" type="text" placeholder="e.g. Gaston or St. Catherine">
-        </div>
-        <div class="field">
-          <label for="tkCity">City / town</label>
-          <input id="tkCity" type="text" placeholder="e.g. Belmont">
-        </div>
-        <div class="field full">
-          <label for="tkEnslaver">Possible enslaver surname (optional)</label>
-          <input id="tkEnslaver" type="text" placeholder="e.g. a local landowning family with the same or a related surname">
-          <div class="field-hint">Before 1870 in the U.S., formerly enslaved people usually appear only under the enslaver's name in tax lists and slave schedules — not their own. In the British Caribbean, try the plantation owner in the 1817–1834 slave registers.</div>
-        </div>
-        <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px;">
-          <button class="btn" onclick="runDiscovery()">Search</button>
-        </div>
-      </div>
-
-      <div id="toolkitResults"></div>
-    </div>
-
-    <!-- ===== RESEARCH PLAN ===== -->
-    <div class="view" id="view-plan">
-      <div class="view-head">
-        <div>
-          <div class="view-eyebrow">Record 04</div>
-          <h1 class="view-title">Research Plan</h1>
-          <div class="view-sub">The Field Guide's method, turned into steps. Pick an ancestor and work back past 1870 — every step comes with prefilled searches and one-click log entries.</div>
-        </div>
-      </div>
-      <div id="planContent"></div>
-    </div>
-
-    <!-- ===== FIELD GUIDE ===== -->
-    <div class="view" id="view-guide">
-      <div class="view-head">
-        <div>
-          <div class="view-eyebrow">Record 05</div>
-          <h1 class="view-title">Field Guide</h1>
-          <div class="view-sub">A short orientation to the records that matter most for Black American genealogy, and why 1870 is the wall most researchers hit first.</div>
-        </div>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§1</span> The 1870 brick wall</h3>
-        <p>The 1870 US Census is the first federal census that lists formerly enslaved Black Americans by their own full names. Before that, enslaved people were almost never named individually in official records — the 1850 and 1860 Slave Schedules list only the enslaver's name, with the people they enslaved reduced to tally marks: age, sex, and color. This is the single biggest reason Black family history research stalls before 1870, and it's not a gap in the records you're using — it's a gap in what was recorded at all.</p>
-        <div class="callout">
-          <div class="callout-title">What this means in practice</div>
-          Getting past 1870 usually requires working sideways through indirect records — Freedmen's Bureau files, Freedman's Bank registers, cohabitation/marriage records, and the enslaver's own papers (wills, estate inventories, bills of sale) — rather than a single record that names your ancestor directly.
-        </div>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§2</span> Freedmen's Bureau records (1865–1872)</h3>
-        <p>The Bureau of Refugees, Freedmen, and Abandoned Lands operated field offices across the South from 1865–1872, and its records are the richest source for the immediate post-emancipation years: labor contracts, marriage registers, hospital and ration rolls, complaint registers, and letters from freedpeople themselves searching for family members sold away from them. Records are organized by state and then by field office, not by name — so you generally need to know the county or nearest office before you can search effectively. That's what the Discovery tab is for.</p>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§3</span> Freedman's Savings & Trust Bank records (1865–1874)</h3>
-        <p>Separate from the Bureau, the Freedman's Bank opened branches in most Southern cities and kept detailed depositor registers — often including birthplace, plantation, former enslaver's name, spouse, children, and siblings. When an ancestor's account survives, it can be the single most valuable document you find, because it's one of the few sources where a formerly enslaved person's own account of their family was recorded in their own words.</p>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§4</span> Cohabitation records (North Carolina and other states, 1866–1868)</h3>
-        <p>After emancipation, most Southern states required formerly enslaved couples who had been living as married to formally register that marriage with the county — since slave marriages had no legal standing before the war. In North Carolina, this followed the 1866 "Act Concerning Negroes and Persons of Color," and the resulting cohabitation bonds, filed with each county's Register of Deeds, list the couple's names, ages, and how long they'd been together — and sometimes the enslaver's name and number of children. About 20,000 of these survive across 52 NC counties.</p>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§5</span> WPA Slave Narratives (1936–1938)</h3>
-        <p>Federal Writers' Project interviewers recorded over 2,300 formerly enslaved people in the 1930s, capturing firsthand memories of specific plantations, enslavers, and family members. Coverage is uneven by county, so check neighboring counties too if your target county has none.</p>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§6</span> Tracing through the enslaver's surname</h3>
-        <p>Many formerly enslaved people kept the surname of a former enslaver, took the name of a different prominent local family, or chose an entirely new one at emancipation — so a shared surname is a lead, not proof. Once you have a candidate enslaver, their own estate records (wills, probate inventories, tax lists, bills of sale) can list enslaved individuals by first name and sometimes age, which you can then try to match against your family's oral history and later census entries.</p>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§7</span> U.S. Colored Troops service and pension files (1863–1930s)</h3>
-        <p>Roughly 180,000 Black men served in the U.S. Colored Troops during the Civil War, and their records are among the richest in this field. Start with the free NPS Soldiers &amp; Sailors database to find a serviceman by name and unit; his compiled service record and — above all — his (or his widow's) pension file at the National Archives can run to dozens of pages of sworn testimony naming parents, spouses, children, former enslavers, and plantations. Widows' pension applications often required proving a slave marriage, so they preserve exactly the family detail no other record kept.</p>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§8</span> DNA as a complementary tool</h3>
-        <p>Because the paper trail often breaks at 1870 — and almost never names an African village — DNA matching (autosomal testing plus shared-match tools) is often the only way to narrow an African region. Ethnicity estimates point to areas (e.g. Nigeria, Ghana, Senegambia); matches with people who have deep paper trails in West Africa or the Caribbean can refine that further. Record company, estimates, and key matches on each person's DNA workspace. DNA works best alongside the paper trail, not instead of it — and a percentage is not a village.</p>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§9</span> Bridging toward Africa</h3>
-        <p>You cannot usually surname-search Africa the way you search the 1870 census. The workable path is: push the American or Caribbean line as far back as documents allow → capture any “African-born,” ethnonym (Igbo, Coromantee, Congo…), ship, or port clue → use DNA for a hypothesized region → search <a href="https://www.slavevoyages.org/" target="_blank" rel="noopener">Slave Voyages</a> by coast/decade/port and <a href="https://www.slavevoyages.org/resources/african-origins" target="_blank" rel="noopener">African Origins</a> if an African given name survives. Tag every claim with confidence (documentary, DNA-supported, oral, or speculative). The Research Plan’s final step walks this sequence per ancestor.</p>
-      </div>
-
-      <div class="guide-section">
-        <h3><span class="gnum">§10</span> Example: starting points for Belmont / Gaston County, NC</h3>
-        <p>To show how the U.S. side of the work fits together, here's what a real starting point looks like for one specific place — Belmont, in Gaston County, North Carolina.</p>
-        <div class="example-box">
-          <h4>Gaston County, NC — confirmed resources</h4>
-          <ul>
-            <li>Gaston County's cohabitation records survive as part of its county marriage records — start with <a href="https://www.familysearch.org/search/collection/1726957" target="_blank" rel="noopener">FamilySearch: North Carolina, County Marriages, 1762–1979</a>.</li>
-            <li>North Carolina's Freedmen's Bureau field office records (NARA microfilm M1909) are indexed and imaged at <a href="https://www.familysearch.org/en/search/collection/2143119" target="_blank" rel="noopener">FamilySearch: NC Freedmen's Bureau Field Office Records</a>. Charlotte (the nearest major field office to Gaston County) had a Freedmen's Hospital with its own patient registers.</li>
-            <li>The NC State Archives' digitized <a href="https://digital.ncdcr.gov/collections/cohabitation-records" target="_blank" rel="noopener">Cohabitation Records collection</a> covers the broader 1866–1868 statewide set, ongoing digitization.</li>
-            <li>As of recent library research, no WPA narrators were recorded from Gaston or neighboring Lincoln County specifically — worth checking bordering Mecklenburg and Cleveland counties instead.</li>
-          </ul>
-        </div>
-        <p style="margin-top:14px;">This same approach — find the county, find its surviving record types, then search each one by name — is what the Discovery tab automates for any state or county you enter.</p>
-      </div>
-    </div>
-
+<!-- ── Hero ───────────────────────────────────────── -->
+<section class="hero" aria-labelledby="hero-headline">
+  <div class="hero-mark" aria-hidden="true">F</div>
+  <p class="hero-eyebrow">For Black American families</p>
+  <h1 id="hero-headline">
+    Your family didn't disappear<br>in <span class="hero-accent">1870.</span>
+  </h1>
+  <p class="hero-sub">
+    The 1870 census is where most Black family trees hit a wall — because before emancipation, enslaved people weren't named in federal records. But the documents exist. Forebear helps you find them.
+  </p>
+  <div class="hero-cta-group">
+    <a href="app.html" class="btn-primary">
+      Begin your research <span class="btn-arrow">→</span>
+    </a>
+    <p class="hero-note">Free &nbsp;·&nbsp; Private &nbsp;·&nbsp; No account required</p>
   </div>
-</div>
+</section>
 
-<!-- ===== PERSON MODAL ===== -->
-<div class="overlay" id="personOverlay">
-  <div class="modal">
-    <button class="close-x" onclick="closeOverlay('personOverlay')">✕</button>
-    <div class="modal-title" id="personModalTitle">Add a person</div>
-    <div class="modal-sub">Only add what you can support — it's fine to leave fields blank until you find them.</div>
-    <form id="personForm" onsubmit="return savePerson(event)">
-      <input type="hidden" id="pId">
-      <div class="form-grid">
-        <div class="field full">
-          <label>Name *</label>
-          <input id="pName" required type="text" placeholder="Full name as best known">
-        </div>
-        <div class="field full">
-          <label>Name variants</label>
-          <input id="pVariants" type="text" placeholder="e.g. Hattie Stow, Harriet Stowe — comma-separated">
-          <div class="field-hint">Surnames were often chosen, changed, or respelled at emancipation — record every spelling you've seen in a record.</div>
-        </div>
-        <div class="field">
-          <label>Birth year</label>
-          <input id="pBirth" type="text" placeholder="e.g. c. 1848">
-        </div>
-        <div class="field">
-          <label>Death year</label>
-          <input id="pDeath" type="text" placeholder="e.g. 1921">
-        </div>
-        <div class="field full">
-          <label>Birthplace</label>
-          <input id="pPlace" type="text" placeholder="e.g. Belmont, Gaston County, NC">
-        </div>
-        <div class="field full">
-          <label>Associated enslaver surname (pre-1870 only, if known)</label>
-          <input id="pEnslaver" type="text" placeholder="Leave blank if not applicable">
-        </div>
-        <div class="field full">
-          <label>Parents (select any already in your tree)</label>
-          <div class="parent-picker" id="parentPicker"></div>
-        </div>
-        <div class="field full">
-          <label>Spouses (select any already in your tree)</label>
-          <div class="parent-picker" id="spousePicker"></div>
-          <div class="field-hint">The note is for the record that ties the couple — e.g. "cohabitation bond, Gaston County, 1866".</div>
-        </div>
-        <div class="field full">
-          <label>Notes</label>
-          <textarea id="pNotes" rows="3" placeholder="Oral history, uncertainties, spelling variants..."></textarea>
-        </div>
+<hr class="section-divider">
 
-        <div class="field full form-section-label">DNA workspace</div>
-        <div class="field">
-          <label>Testing company</label>
-          <select id="pDnaCompany">
-            <option value="">— Not tested / not entered —</option>
-            <option>AncestryDNA</option>
-            <option>23andMe</option>
-            <option>MyHeritage</option>
-            <option>FamilyTreeDNA</option>
-            <option>Living DNA</option>
-            <option>Other</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Year tested</label>
-          <input id="pDnaYear" type="text" placeholder="e.g. 2024">
-        </div>
-        <div class="field full">
-          <label>Ethnicity estimate notes</label>
-          <textarea id="pDnaEthnicity" rows="2" placeholder="e.g. Nigeria 28%, Ghana 12%, Senegal 8% — copy the breakdown that matters"></textarea>
-        </div>
-        <div class="field full">
-          <label>Hypothesized African region (from DNA)</label>
-          <input id="pDnaRegion" type="text" placeholder="e.g. Bight of Biafra / southeastern Nigeria">
-        </div>
-        <div class="field full">
-          <label>Key African or diaspora matches</label>
-          <textarea id="pDnaMatches" rows="2" placeholder="Match name or initials, shared cM, hypothesized connection"></textarea>
-        </div>
-        <div class="field full">
-          <label>Shared segments / cluster notes</label>
-          <textarea id="pDnaSegments" rows="2" placeholder="Optional: chromosome browser or shared-match cluster notes"></textarea>
-        </div>
-
-        <div class="field full form-section-label">Bridge to Africa</div>
-        <div class="field full">
-          <label class="inline-check"><input type="checkbox" id="pAfricaBorn"> A record calls them African-born (or “born in Africa”)</label>
-        </div>
-        <div class="field">
-          <label>African given name (if known)</label>
-          <input id="pAfricaName" type="text" placeholder="From African Origins, colonial register, etc.">
-        </div>
-        <div class="field">
-          <label>Ethnonym in a record</label>
-          <select id="pEthnonym"></select>
-        </div>
-        <div class="field">
-          <label>Embarkation coast (hypothesis)</label>
-          <select id="pEmbarkCoast"></select>
-        </div>
-        <div class="field">
-          <label>Embarkation decade</label>
-          <input id="pEmbarkDecade" type="text" placeholder="e.g. 1800">
-        </div>
-        <div class="field">
-          <label>Disembarkation port / region</label>
-          <select id="pDisembark"></select>
-        </div>
-        <div class="field">
-          <label>Ship name (if known)</label>
-          <input id="pShip" type="text" placeholder="Optional">
-        </div>
-        <div class="field full">
-          <label>Oral tradition about Africa</label>
-          <textarea id="pAfricaOral" rows="2" placeholder="e.g. Grandmother said the family was 'from Guinea' — treat as a lead"></textarea>
-        </div>
-        <div class="field">
-          <label>Region claim</label>
-          <input id="pAfricaRegion" type="text" placeholder="Best current claim, e.g. Igbo / SE Nigeria">
-        </div>
-        <div class="field">
-          <label>Confidence in that claim</label>
-          <select id="pAfricaConfidence"></select>
-          <div class="field-hint">Be honest — DNA regions and ethnonyms are not village proofs.</div>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-danger btn-small" id="pDeleteBtn" style="display:none;" onclick="deletePersonFromModal()">Delete person</button>
-        <div class="modal-actions-right">
-          <button type="button" class="btn btn-ghost" onclick="closeOverlay('personOverlay')">Cancel</button>
-          <button type="submit" class="btn">Save</button>
-        </div>
-      </div>
-    </form>
+<!-- ── The Problem ────────────────────────────────── -->
+<section class="problem-band" aria-labelledby="problem-headline">
+  <div class="wrap">
+    <p class="section-eyebrow">The challenge</p>
+    <h2 id="problem-headline">The 1870 Brick Wall</h2>
+    <p>
+      The 1870 federal census is the first to list formerly enslaved Black Americans by their own full names. Before it, enslaved people appeared in official records only as property — the 1850 and 1860 Slave Schedules recorded the enslaver's name, ages, and a count, but never the individuals themselves. For millions of families, this is where the paper trail runs out.
+    </p>
+    <div class="problem-pull">
+      <p>"Getting past 1870 usually requires working sideways through indirect records — Freedmen's Bureau files, Freedman's Bank registers, cohabitation bonds, and the enslaver's own papers — rather than a single record that names your ancestor directly."</p>
+    </div>
+    <p>
+      The records aren't gone. Freedmen's Bureau field offices kept labor contracts, marriage registers, and letters from people searching for family sold away from them. Freedman's Bank branches kept depositor registers with birthplace, former enslaver, spouse, and siblings. Cohabitation bonds recorded formerly enslaved couples' own words about their families. Forebear surfaces all of it.
+    </p>
   </div>
-</div>
+</section>
 
-<!-- ===== LOG MODAL ===== -->
-<div class="overlay" id="logOverlay">
-  <div class="modal">
-    <button class="close-x" onclick="closeOverlay('logOverlay')">✕</button>
-    <div class="modal-title" id="logModalTitle">Log a source</div>
-    <div class="modal-sub">Every source, hit or miss, is worth recording — a dead end today saves you from re-searching it in a year.</div>
-    <form id="logForm" onsubmit="return saveLog(event)">
-      <input type="hidden" id="lId">
-      <div class="form-grid">
-        <div class="field">
-          <label>Date</label>
-          <input id="lDate" type="date">
-        </div>
-        <div class="field">
-          <label>Linked person</label>
-          <select id="lPerson"><option value="">Unassigned / general</option></select>
-        </div>
-        <div class="field">
-          <label>Source type</label>
-          <select id="lType">
-            <option>Freedmen's Bureau Record</option>
-            <option>Freedman's Bank Record</option>
-            <option>Cohabitation / Marriage Record</option>
-            <option>Census / Slave Schedule</option>
-            <option>Military / Pension Record</option>
-            <option>WPA Slave Narrative</option>
-            <option>Newspaper / Advertisement</option>
-            <option>Court / Petition</option>
-            <option>Ship / Voyage Record</option>
-            <option>Vital Record</option>
-            <option>Oral History</option>
-            <option>DNA Match</option>
-            <option>Other</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Status</label>
-          <select id="lStatus" onchange="syncLogConfidence(this.value)">
-            <option value="to-research">To research</option>
-            <option value="promising">Promising lead</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="dead-end">Dead end</option>
-          </select>
-        </div>
-        <div class="field full">
-          <label>Source name / title</label>
-          <input id="lSourceName" type="text" placeholder="e.g. NC Freedmen's Bureau Field Office Records, Charlotte">
-        </div>
-        <div class="field full">
-          <label>Citation / link</label>
-          <input id="lCitation" type="text" placeholder="URL, roll number, or full citation">
-        </div>
-        <div class="field full">
-          <label>This source is evidence for…</label>
-          <div class="supports-picker" id="supportsPicker">
-            <label><input type="checkbox" class="support-check" value="name"> Name</label>
-            <label><input type="checkbox" class="support-check" value="birth"> Birth</label>
-            <label><input type="checkbox" class="support-check" value="death"> Death</label>
-            <label><input type="checkbox" class="support-check" value="parentage"> Parentage</label>
-            <label><input type="checkbox" class="support-check" value="relationship"> Relationship</label>
-            <label><input type="checkbox" class="support-check" value="location"> Location</label>
-            <label><input type="checkbox" class="support-check" value="origin"> African origin</label>
-          </div>
-          <div class="field-hint">Mark which facts about the linked person this source supports. Confirmed sources show these on the person's card.</div>
-        </div>
-        <div class="field full">
-          <label>Confidence</label>
-          <select id="lConfidence"></select>
-          <div class="field-hint">How strong is this as evidence? Documentary beats DNA estimate beats oral tradition beats speculation.</div>
-        </div>
-        <div class="field full">
-          <label>Findings</label>
-          <textarea id="lFindings" rows="3" placeholder="What did you find, or rule out?"></textarea>
-        </div>
-        <div class="field full">
-          <label>Next steps</label>
-          <textarea id="lNext" rows="2" placeholder="What to try next"></textarea>
-        </div>
+<!-- ── Features ───────────────────────────────────── -->
+<section class="features" aria-labelledby="features-headline">
+  <div class="wrap-wide">
+    <div class="features-header">
+      <p class="section-eyebrow">What Forebear does</p>
+      <h2 id="features-headline">Every tool the research demands</h2>
+      <p>Built specifically for the records and methods that matter in Black American genealogy — not a general-purpose tree builder.</p>
+    </div>
+    <div class="feature-grid" role="list">
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-icon" aria-hidden="true">📋</div>
+        <h3>Guided Research Plan</h3>
+        <p>
+          Pick an ancestor and work backwards — step by step. Anchor them in the 1870 census, locate their county's Freedmen's Bureau field office, check the Bank and cohabitation records, identify enslaver candidates. Every step includes prefilled searches and one-click log entries so nothing slips through.
+        </p>
+        <span class="feature-tag">Per-person · Persistent progress</span>
       </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-danger btn-small" id="lDeleteBtn" style="display:none;" onclick="deleteLogFromModal()">Delete entry</button>
-        <div class="modal-actions-right">
-          <button type="button" class="btn btn-ghost" onclick="closeOverlay('logOverlay')">Cancel</button>
-          <button type="submit" class="btn">Save</button>
-        </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-icon" aria-hidden="true">🔍</div>
+        <h3>Discovery — 80+ Archives</h3>
+        <p>
+          Enter a name, place, and time period — Discovery builds prefilled deep links into the Freedmen's Bureau, Freedman's Bank, USCT pensions, state archives across the South, Last Seen reunion ads, Caribbean records, Canadian Black Loyalist registers, and the Atlantic slave trade databases. Name variants are searched too.
+        </p>
+        <span class="feature-tag">One search · Dozens of collections</span>
       </div>
-    </form>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-icon" aria-hidden="true">🌍</div>
+        <h3>Bridge to Africa</h3>
+        <p>
+          Push the line as far as documents allow, then map what DNA, ethnonyms, and Atlantic voyage records can add. The Bridge to Africa workspace holds your DNA results, ethnonym glossary lookups, Slave Voyages embarkation data, and African Origins research — all tagged by confidence level so you know what's proven and what's a working hypothesis.
+        </p>
+        <span class="feature-tag">DNA + Documents + Oral tradition</span>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-icon" aria-hidden="true">📖</div>
+        <h3>Research Log + Field Guide</h3>
+        <p>
+          Track every source you consult — hit or miss. A dead end recorded today saves you from re-searching it in three years. The built-in Field Guide covers the 1870 brick wall, Freedmen's Bureau and Bank records, cohabitation bonds, USCT pensions, WPA narratives, and the step-by-step path toward Africa — in plain language, not genealogist jargon.
+        </p>
+        <span class="feature-tag">Every source tracked · Confidence levels</span>
+      </div>
+
+    </div>
   </div>
-</div>
+</section>
 
-<!-- ===== IMPORT MODAL ===== -->
-<div class="overlay" id="importOverlay">
-  <div class="modal">
-    <button class="close-x" onclick="closeOverlay('importOverlay')">✕</button>
-    <div class="modal-title">Import backup</div>
-    <div class="modal-sub" id="importSummary"></div>
-    <div class="modal-actions">
-      <button type="button" class="btn btn-ghost" onclick="closeOverlay('importOverlay')">Cancel</button>
-      <div class="modal-actions-right">
-        <button type="button" class="btn btn-danger" onclick="applyImport('replace')">Replace my data</button>
-        <button type="button" class="btn" onclick="applyImport('merge')">Merge into my data</button>
+<!-- ── How it works ────────────────────────────────── -->
+<section class="how" aria-labelledby="how-headline">
+  <div class="wrap">
+    <h2 id="how-headline">How the research unfolds</h2>
+    <div class="steps" role="list">
+      <div class="step" role="listitem">
+        <div class="step-num" aria-hidden="true">1</div>
+        <h4>Add what you know</h4>
+        <p>Enter ancestors with whatever you have — name, birth year, place, oral history. Link parents, children, spouses.</p>
+      </div>
+      <div class="step" role="listitem">
+        <div class="step-num" aria-hidden="true">2</div>
+        <h4>Run the Research Plan</h4>
+        <p>Pick a person. The plan walks you through each record type in order, from 1870 census onward.</p>
+      </div>
+      <div class="step" role="listitem">
+        <div class="step-num" aria-hidden="true">3</div>
+        <h4>Search with Discovery</h4>
+        <p>One search surfaces 80+ relevant archive links. Log every result — including the dead ends.</p>
+      </div>
+      <div class="step" role="listitem">
+        <div class="step-num" aria-hidden="true">4</div>
+        <h4>Bridge toward Africa</h4>
+        <p>Layer in DNA, ethnonyms, and voyage records. Tag confidence levels and build toward pre-Middle Passage ancestry.</p>
       </div>
     </div>
   </div>
-</div>
+</section>
 
-<!-- ===== FAMILY SYNC MODAL ===== -->
-<div class="overlay" id="syncOverlay">
-  <div class="modal">
-    <button class="close-x" onclick="closeOverlay('syncOverlay')">✕</button>
-    <div class="modal-title">Family sync</div>
-    <div class="modal-sub">Optional. Deploy the small sync endpoint in this repo once (see the README), then everyone who enters the same family code and passphrase shares one tree — edits merge, newest wins, deletions carry over.</div>
-    <div class="form-grid">
-      <div class="field full">
-        <label>Sync endpoint URL</label>
-        <input id="syncEndpoint" type="text" placeholder="https://your-app.vercel.app/api/sync">
-      </div>
-      <div class="field">
-        <label>Family code</label>
-        <input id="syncCode" type="text" placeholder="e.g. stowe-family">
-      </div>
-      <div class="field">
-        <label>Passphrase</label>
-        <input id="syncPass" type="password" placeholder="Share only with family">
-        <div class="field-hint">The first person to sync with a code sets its passphrase.</div>
-      </div>
-    </div>
-    <div class="sync-status" id="syncStatus">Not configured — your data stays in this browser only.</div>
-    <div class="modal-actions">
-      <button type="button" class="btn btn-danger btn-small" onclick="disableSync()">Turn off sync</button>
-      <div class="modal-actions-right">
-        <button type="button" class="btn btn-ghost" onclick="closeOverlay('syncOverlay')">Close</button>
-        <button type="button" class="btn" onclick="saveSyncConfig()">Save &amp; sync now</button>
-      </div>
+<!-- ── Privacy ─────────────────────────────────────── -->
+<section class="privacy" aria-labelledby="privacy-headline">
+  <div class="wrap">
+    <div class="privacy-icon" aria-hidden="true">🔒</div>
+    <h2 id="privacy-headline">Your family history stays yours</h2>
+    <p>Forebear runs entirely in your browser. No account, no server, no data collection — nothing leaves your device unless you export it yourself.</p>
+    <p>Export a full JSON backup whenever you want, or a GEDCOM file to import into Ancestry, FamilySearch, or Gramps.</p>
+    <div class="privacy-chips" aria-label="Privacy features">
+      <span class="privacy-chip">No account required</span>
+      <span class="privacy-chip">No data sent to servers</span>
+      <span class="privacy-chip">Export any time</span>
+      <span class="privacy-chip">GEDCOM compatible</span>
+      <span class="privacy-chip">Open source</span>
     </div>
   </div>
-</div>
+</section>
 
-<script src="js/sources.js"></script>
-<script src="js/africa.js"></script>
-<script src="js/app.js"></script>
-<script src="js/plan.js"></script>
-<script src="js/sync.js"></script>
+<!-- ── Final CTA ───────────────────────────────────── -->
+<section class="final-cta" aria-labelledby="cta-headline">
+  <p class="final-cta-eyebrow">Get started</p>
+  <h2 id="cta-headline">Start with what you know. Find the rest.</h2>
+  <p>Every ancestor left a trace somewhere. Forebear helps you follow the thread.</p>
+  <a href="app.html" class="btn-primary">
+    Open Forebear — it's free <span class="btn-arrow">→</span>
+  </a>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────── -->
+<footer class="site-footer" role="contentinfo">
+  <p>
+    Forebear &nbsp;·&nbsp;
+    <a href="app.html">Open app</a> &nbsp;·&nbsp;
+    <a href="https://github.com/JStoweYouKnow/sankofa" target="_blank" rel="noopener">GitHub</a> &nbsp;·&nbsp;
+    <a href="https://github.com/JStoweYouKnow/sankofa/issues/new?labels=beta-feedback&template=beta_feedback.md" target="_blank" rel="noopener">Give feedback</a>
+    &nbsp;·&nbsp; MIT License
+  </p>
+  <p style="margin-top:8px;font-style:italic;opacity:.55;">"Se wo were fi na wosankofa a yenkyi" — it is not wrong to go back for that which you have forgotten.</p>
+</footer>
+
+<script>
+  // Sync toggle label on load
+  (function(){
+    var t = localStorage.getItem('forebear-theme') || 'dark';
+    var btn = document.getElementById('themeToggleLanding');
+    if(btn) btn.textContent = t === 'light' ? '◑ Dark' : '☀ Light';
+  }());
+
+  function toggleLandingTheme(){
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('forebear-theme', next);
+    var btn = document.getElementById('themeToggleLanding');
+    if(btn) btn.textContent = next === 'light' ? '◑ Dark' : '☀ Light';
+  }
+</script>
 </body>
 </html>
