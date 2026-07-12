@@ -8,6 +8,8 @@
 <title>Forebear — Ancestry Discovery Companion</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230F0D09' rx='4'/><text x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='18' fill='%23D4943E' font-weight='bold'>F</text></svg>">
 <link rel="stylesheet" href="css/styles.css">
+<!-- Apply saved theme before first paint to prevent flash -->
+<script>(function(){var t=localStorage.getItem('forebear-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}());</script>
 </head>
 <body>
 
@@ -41,7 +43,8 @@
       <div id="privacyNote" style="margin-top:8px;">Data stays in this browser unless you export a backup or turn on Family sync.</div>
       <div class="rail-meta-row">
         <span class="beta-badge">v0.1-beta</span>
-        <a class="feedback-link" href="https://github.com/JStoweYouKnow/sankofa/issues/new?labels=beta-feedback&template=beta_feedback.md" target="_blank" rel="noopener">Give feedback</a>
+        <button type="button" id="themeToggle" class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle colour mode">☀ Light</button>
+        <a class="feedback-link" href="https://github.com/JStoweYouKnow/sankofa/issues/new?labels=beta-feedback&template=beta_feedback.md" target="_blank" rel="noopener">Feedback</a>
       </div>
       <input type="file" id="importFile" accept=".json,application/json" style="display:none">
     </div>

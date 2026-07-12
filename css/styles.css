@@ -955,6 +955,62 @@
   }
   .rail-backdrop.open{display:block;}
 
+  /* ================================================================
+     Light mode — warm parchment palette
+     Rail intentionally stays dark (book-spine contrast).
+     ================================================================ */
+  [data-theme="light"] {
+    --paper:#F3EBD5;
+    --paper-deep:#EAE0C4;
+    --card:#FDFAF0;
+    --card-raised:#F3EBD5;
+    --ink:#1A1208;
+    --ink-soft:#55401C;
+    --ink-faint:#8C7050;
+    --brass:#7A520E;
+    --brass-light:#9A6A18;
+    --indigo:#234D8A;
+    --indigo-light:#2E64B0;
+    --oxblood:#882810;
+    --line:#CCC0A0;
+    --line-soft:#DDD2B4;
+    --green:#245A2C;
+  }
+  /* Smooth theme crossfade on the content areas only */
+  [data-theme="light"] .main,
+  [data-theme="light"] .person-card,
+  [data-theme="light"] .log-card,
+  [data-theme="light"] .modal,
+  [data-theme="light"] .toolkit-form,
+  [data-theme="light"] .plan-step,
+  [data-theme="light"] .plan-next,
+  [data-theme="light"] .result-card,
+  [data-theme="light"] .overlay {
+    transition:background-color .25s ease, border-color .25s ease;
+  }
+  /* Light mode selection highlight */
+  [data-theme="light"] ::selection {
+    background:rgba(122,82,14,0.2);
+  }
+  /* Light mode scrollbar */
+  [data-theme="light"] ::-webkit-scrollbar-track { background:var(--paper-deep); }
+  [data-theme="light"] ::-webkit-scrollbar-thumb { background:var(--line); }
+
+  /* Toggle button in rail footer */
+  .theme-toggle-btn {
+    background:none;
+    border:none;
+    padding:0;
+    font-family:'Courier Prime',monospace;
+    font-size:10.5px;
+    letter-spacing:0.3px;
+    color:rgba(239,231,211,0.4);
+    cursor:pointer;
+    transition:color .15s ease;
+  }
+  .theme-toggle-btn:hover { color:var(--brass-light); }
+
+  /* ---- Mobile rail ---- */
   @media (max-width:700px){
     .rail-toggle{display:flex;}
     .rail{

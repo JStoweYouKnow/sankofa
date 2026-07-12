@@ -1209,10 +1209,29 @@ function queueLogFromResult(c){
   });
 }
 
+// ---------- Theme ----------
+function toggleTheme(){
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  applyTheme(isDark ? 'light' : 'dark');
+}
+function applyTheme(theme){
+  if(theme === 'light'){
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  localStorage.setItem('forebear-theme', theme);
+  const btn = document.getElementById('themeToggle');
+  if(btn) btn.textContent = theme === 'light' ? '◑ Dark' : '☀ Light';
+}
+
 // ---------- init ----------
 // Deferred to DOMContentLoaded so js/plan.js and js/sync.js (loaded
 // after this file) are in place before the first render/sync.
 window.addEventListener('DOMContentLoaded', async ()=>{
+  // Sync toggle label with whatever the head script already applied
+  const saved = localStorage.getItem('forebear-theme') || 'dark';
+  applyTheme(saved);
   await loadMeta();
   await loadData();
   await loadKeys();
