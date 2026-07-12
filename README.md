@@ -13,6 +13,7 @@ Forebear is an ancestry discovery companion built for the specific challenges of
 - **Research Plan** — the Field Guide's method as steps attached to a chosen ancestor: anchor in the 1870 census, pin county and Freedmen's Bureau field office, work that place's record checklist, test enslaver candidates, confirm with a named source, then **Bridge toward Africa** (DNA workspace, ethnonyms, voyage matcher, African Origins, confidence levels). Progress persists per person so the app can answer "what's my next step?"
 - **Field Guide** — a short orientation to Freedmen's Bureau records, Freedman's Bank registers, cohabitation records, WPA slave narratives, and tracing through an enslaver's surname.
 - **Family sync (optional)** — share one tree across devices or relatives via a family code + passphrase. Off by default; the app stays fully usable without it.
+- **Onboarding** — a one-time welcome explains the suggested path (reopen it any time via "How this works" in the sidebar); a fictional **sample family** (the Freemans of Gaston County, NC) can be loaded to explore a populated tree, log, and half-finished research plan, then removed in one click; a dismissible getting-started checklist tracks the first five actions; and the person form keeps the DNA and Bridge-to-Africa sections collapsed until you need them.
 
 ## Running it locally
 
@@ -70,6 +71,10 @@ The Discovery tab queries the Smithsonian Open Access API directly from the brow
 The key is entered in-app (Discovery → "Connect data sources") and stored via the same `storage` shim, so it lives in `localStorage` alongside everything else. It is never sent anywhere except directly to the Smithsonian's own API.
 
 **Verified July 2026:** the Smithsonian endpoint returns results with `Access-Control-Allow-Origin: *`, so it works from the browser. A **National Archives Catalog v2** live integration used to exist, but as of July 2026 `catalog.archives.gov/api/v2/*` serves the catalog website's HTML shell to every request (even the documented curl examples), so it was removed rather than shipped dead — the Discovery tab links into NARA's catalog search UI instead. If the API comes back, the old integration is in git history (`searchNARA` in `js/app.js`).
+
+## Testing
+
+`npm test` runs `test/smoke.js` — a Node harness that loads the real app modules against a stubbed DOM/localStorage and exercises schema migration, spouse mirroring, GEDCOM structure, import merge/replace, the source registry's URL building, Smithsonian response parsing (against a captured fixture in `test/fixtures/`), XSS escaping, sync merge semantics, and the onboarding flows (sample family, checklist, collapsible form sections). Keep it green: when labels, schema versions, or registry entries change, update the expectations in the same commit.
 
 ## Deploying
 

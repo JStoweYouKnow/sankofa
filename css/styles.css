@@ -426,6 +426,96 @@
     color:var(--brass);margin-top:8px;padding-top:14px;
     border-top:1px solid var(--line-soft);
   }
+  /* collapsible person-form sections (DNA, Bridge to Africa) */
+  .form-section-toggle{
+    font-family:'Courier Prime',monospace;
+    font-size:11px;text-transform:uppercase;letter-spacing:1px;
+    color:var(--brass);margin-top:8px;padding:14px 0 0;
+    border:none;border-top:1px solid var(--line-soft);
+    background:none;cursor:pointer;text-align:left;
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .form-section-toggle:hover{color:var(--brass-light);}
+  .form-section-toggle .toggle-caret{font-size:10px;width:10px;}
+  .form-section-toggle .toggle-hint{
+    font-family:'Inter',sans-serif;
+    font-size:10.5px;text-transform:none;letter-spacing:0;
+    color:var(--ink-faint);margin-left:auto;
+  }
+  .form-section{display:contents;}
+  .form-section.collapsed{display:none;}
+
+  /* welcome modal */
+  .welcome-steps{
+    margin:0 0 16px;padding-left:20px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .welcome-steps li{font-size:13.5px;line-height:1.6;color:var(--ink-soft);}
+  .welcome-steps li strong{color:var(--ink);}
+  .welcome-steps li::marker{
+    font-family:'Courier Prime',monospace;
+    color:var(--brass);
+  }
+  .welcome-privacy{
+    font-family:'Courier Prime',monospace;
+    font-size:11px;line-height:1.5;color:var(--ink-faint);
+    border-left:2px solid var(--brass);
+    padding:6px 12px;margin-bottom:4px;
+  }
+
+  /* sample-family banner */
+  .sample-banner{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    background:rgba(212,148,58,0.08);
+    border:1px dashed var(--brass);
+    border-radius:3px;
+    padding:10px 14px;margin-bottom:20px;
+    font-size:12.5px;line-height:1.5;color:var(--ink-soft);
+  }
+  .sample-banner strong{color:var(--brass);}
+  .onboard-sample-row{
+    margin-top:18px;display:flex;align-items:center;justify-content:center;gap:10px;
+    font-size:12.5px;color:var(--ink-faint);
+  }
+
+  /* getting-started checklist */
+  .checklist-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-left:3px solid var(--brass);
+    border-radius:3px;
+    padding:12px 14px;margin-bottom:20px;
+  }
+  .checklist-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .checklist-title{
+    font-family:'Courier Prime',monospace;
+    font-size:11px;text-transform:uppercase;letter-spacing:1px;
+    color:var(--brass);
+  }
+  .checklist-count{
+    font-family:'Courier Prime',monospace;
+    font-size:10.5px;color:var(--ink-faint);
+  }
+  .checklist-dismiss{
+    margin-left:auto;background:none;border:none;cursor:pointer;
+    color:var(--ink-faint);font-size:13px;padding:0 2px;
+  }
+  .checklist-dismiss:hover{color:var(--ink);}
+  .checklist-steps{display:flex;flex-wrap:wrap;gap:6px;}
+  .checklist-step{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:12px;font-family:'Inter',sans-serif;
+    color:var(--ink-soft);background:none;
+    border:1px solid var(--line);border-radius:14px;
+    padding:5px 12px;cursor:pointer;
+    transition:border-color .15s ease,color .15s ease;
+  }
+  .checklist-step:hover:not(:disabled){border-color:var(--brass);color:var(--ink);}
+  .checklist-step.done{
+    color:var(--green);border-color:transparent;
+    background:rgba(94,138,108,0.1);cursor:default;
+  }
+  .checklist-tick{font-family:'Courier Prime',monospace;font-size:11px;}
   .inline-check{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;}
   .plan-africa-grid{
     display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;

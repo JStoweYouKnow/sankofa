@@ -1,0 +1,394 @@
+{
+  "status": 200,
+  "responseCode": 1,
+  "response": {
+    "rows": [
+      {
+        "id": "ld1-1646149545906-1646149943277-0",
+        "title": "The Freedmen's Bureau and Reconstruction : reconsiderations / edited by Paul A. Cimbala and Randall M. Miller",
+        "unitCode": "SIL",
+        "type": "edanmdm",
+        "url": "edanmdm:siris_sil_717703",
+        "content": {
+          "freetext": {
+            "date": [
+              {
+                "label": "Date",
+                "content": "1999"
+              },
+              {
+                "label": "Date",
+                "content": "1863-1877"
+              },
+              {
+                "label": "Date",
+                "content": "1865-1877"
+              }
+            ],
+            "name": [
+              {
+                "label": "Author",
+                "content": "Cimbala, Paul A (Paul Alan) 1951-"
+              },
+              {
+                "label": "Author",
+                "content": "Miller, Randall M"
+              },
+              {
+                "label": "Subject",
+                "content": "United States Bureau of Refugees, Freedmen, and Abandoned Lands"
+              }
+            ],
+            "notes": [
+              {
+                "label": "Contents",
+                "content": "Introduction. The Freedmen's Bureau and Reconstruction : an overview / Randall M. Miller -- Ulysses S. Grant and the Freedmen's Bureau / Brooks D. Simpson -- Andrew Johnson and the Freedmen's Bureau / Hans L. Trefousse -- Emancipation and military pacification : the Freedmen's Bureau and social control in Alabama / Michael W. Fitzgerald -- \"One of the most appreciated labors of the Bureau\" : The Freedmen's Bureau and the Southern Homestead Act / Michael L. Lanza -- The personnel of the Freedmen's Bureau in Arkansas / Randy Finley -- Architects of a benevolent empire : the relationship between the American Missionary Association and the Freedmen's Bureau in Virginia, 1865-1872 / E. Allen Richardson -- \"Une chimère\" : the Freedmen's Bureau in Creole New Orleans / Caryn Cossé Bell -- \"Because they are women\" : gender and the Virginia Freedmen's Bureau's \"War on dependency\" / Mary J. Farmer -- The Freedmen's Bureau and wage labor in the Louisiana sugar region / John C. Rodrigue -- \"A full-fledged government of men\" : Freedmen's Bureau labor policy in South Carolina, 1865-1868 / James D. Schmidt -- \"To enslave the rising generation\" : the Freedmen's Bureau and the Texas Black Code / Barry A. Crouch -- Land, lumber, and learning : the Freedmen's Bureau, education and the Black community in post-emancipation Maryland / Richard Paul Fuke -- Reconstruction's allies : the relationship of the Freedmen's Bureau and the Georgia freedmen -- Afterword / James M. McPherson"
+              }
+            ],
+            "place": [
+              {
+                "label": "Place",
+                "content": "Southern States"
+              },
+              {
+                "label": "Place",
+                "content": "United States"
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "Reconstruction (U.S. history, 1865-1877)"
+              },
+              {
+                "label": "Topic",
+                "content": "Freedmen"
+              },
+              {
+                "label": "Topic",
+                "content": "African Americans--History"
+              },
+              {
+                "label": "Topic",
+                "content": "Politics and government"
+              },
+              {
+                "label": "Topic",
+                "content": "History"
+              },
+              {
+                "label": "Topic",
+                "content": "Race relations"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian Libraries"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Books"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Physical description",
+                "content": "xxxii, 363 p. ; 24 cm"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "date": [
+              "1990s",
+              "1860s",
+              "1870s"
+            ],
+            "name": [
+              "United States",
+              "Cimbala, Paul A",
+              "Miller, Randall M"
+            ],
+            "place": [
+              "United States",
+              "Southern States"
+            ],
+            "topic": [
+              "Reconstruction (U.S. history, 1865-1877)",
+              "Government",
+              "Politics",
+              "History",
+              "Freedmen",
+              "Race relations"
+            ],
+            "culture": [
+              "African Americans"
+            ],
+            "language": [
+              "English language"
+            ],
+            "geoLocation": [
+              {
+                "L1": {
+                  "type": "Continent",
+                  "content": "North America"
+                },
+                "L2": {
+                  "type": "Country",
+                  "content": "United States of America"
+                }
+              }
+            ],
+            "object_type": [
+              "Books"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "title": {
+              "label": "Title",
+              "content": "The Freedmen's Bureau and Reconstruction : reconsiderations / edited by Paul A. Cimbala and Randall M. Miller"
+            },
+            "record_ID": "siris_sil_717703",
+            "unit_code": "SIL",
+            "title_sort": "FREEDMENS BUREAU AND RECONSTRUCTION : RECONSIDERATIONS EDITED BY PAUL A CIMBALA AND RANDALL M MILLER",
+            "data_source": "Smithsonian Libraries",
+            "record_link": "https://siris-libraries.si.edu/ipac20/ipac.jsp?&profile=liball&source=~!silibraries&uri=full=3100001~!717703~!0#focus",
+            "metadata_usage": {
+              "text": "",
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "7a2d364ef2783a5d012d2eeddc9b163ceee675e5",
+        "docSignature": "ad8d0b56177811ed96c3a4bf885f4d58",
+        "timestamp": "1498154379",
+        "lastTimeUpdated": "1661975543",
+        "version": "0"
+      },
+      {
+        "id": "ld1-1646149545906-1646150085771-2",
+        "title": "Freedwomen and the Freedmen's Bureau : race, gender, and public policy in the age of emancipation / Mary Farmer-Kaiser",
+        "unitCode": "SIL",
+        "type": "edanmdm",
+        "url": "edanmdm:siris_sil_991350",
+        "content": {
+          "freetext": {
+            "date": [
+              {
+                "label": "Date",
+                "content": "2010"
+              },
+              {
+                "label": "Date",
+                "content": "19th century"
+              }
+            ],
+            "name": [
+              {
+                "label": "Author",
+                "content": "Farmer-Kaiser, Mary"
+              },
+              {
+                "label": "Subject",
+                "content": "United States Bureau of Refugees, Freedmen, and Abandoned Lands"
+              }
+            ],
+            "notes": [
+              {
+                "label": "Contents",
+                "content": "Introduction: \"a long time in want of a bureau\" -- That the freed-women ... may rise to the dignity and glory of true womanhood : the men, purpose, and gendered freedom of the Freedmen's Bureau -- A weight of circumstances like millstones about their necks to drag and keep them down : freedwomen, federal relief, and the Freedmen's Bureau -- The women are the controlling spirits : freedwomen, free labor, and the Freedmen's Bureau -- To put forth almost superhuman efforts to regain their children : freedwomen, parental rights, and the Freedmen's Bureau -- Strict justice for every man, woman, and child : gender, justice, and the Freedman's Bureau"
+              }
+            ],
+            "place": [
+              {
+                "label": "Place",
+                "content": "Southern States"
+              }
+            ],
+            "topic": [
+              {
+                "label": "Topic",
+                "content": "African American women--History"
+              },
+              {
+                "label": "Topic",
+                "content": "African American women--Social conditions"
+              },
+              {
+                "label": "Topic",
+                "content": "Reconstruction (U.S. history, 1865-1877)--Social aspects"
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data Source",
+                "content": "Smithsonian Libraries"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Type",
+                "content": "Books"
+              }
+            ],
+            "physicalDescription": [
+              {
+                "label": "Physical description",
+                "content": "xiv, 275 p. : ill. ; 23 cm"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "date": [
+              "1800s",
+              "1810s",
+              "2010s",
+              "1820s",
+              "1830s",
+              "1880s",
+              "1890s",
+              "1840s",
+              "1850s",
+              "1860s",
+              "1870s"
+            ],
+            "name": [
+              "Farmer-Kaiser, Mary",
+              "United States"
+            ],
+            "place": [
+              "Southern States"
+            ],
+            "topic": [
+              "Women",
+              "Reconstruction (U.S. history, 1865-1877)",
+              "History",
+              "Social aspects",
+              "Social conditions",
+              "African American women"
+            ],
+            "culture": [
+              "African Americans"
+            ],
+            "language": [
+              "English language"
+            ],
+            "object_type": [
+              "Books"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "title": {
+              "label": "Title",
+              "content": "Freedwomen and the Freedmen's Bureau : race, gender, and public policy in the age of emancipation / Mary Farmer-Kaiser"
+            },
+            "record_ID": "siris_sil_991350",
+            "unit_code": "SIL",
+            "title_sort": "FREEDWOMEN AND THE FREEDMENS BUREAU : RACE GENDER AND PUBLIC POLICY IN THE AGE OF EMANCIPATION MARY FARMERKAISER",
+            "data_source": "Smithsonian Libraries",
+            "record_link": "https://siris-libraries.si.edu/ipac20/ipac.jsp?&profile=liball&source=~!silibraries&uri=full=3100001~!991350~!0#focus",
+            "metadata_usage": {
+              "text": "",
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "e7bc5531952979ae6ac6f9116a624b5ced927c99",
+        "docSignature": "ed9b26c0141d449f7a1c63b54f553225",
+        "timestamp": "1498153750",
+        "lastTimeUpdated": "1661961872",
+        "version": "0"
+      },
+      {
+        "id": "sro-1697878143594-1697878143811-1",
+        "title": "NMAAHC Freedmen's Bureau Digital Collection transcribed data",
+        "unitCode": "SLA_SRO",
+        "type": "edanmdm",
+        "url": "edanmdm:slasro_170557",
+        "content": {
+          "freetext": {
+            "date": [
+              {
+                "label": "Year",
+                "content": "2023"
+              }
+            ],
+            "name": [
+              {
+                "label": "Author",
+                "content": "Dikow, Rebecca B."
+              }
+            ],
+            "notes": [
+              {
+                "label": "Citation",
+                "content": "Dikow, Rebecca B. 2023. [Dataset] <a href=\"https://smithsonian.figshare.com/articles/dataset/NMAAHC_Freedmen_s_Bureau_Digital_Collection_transcribed_data/24158454/1\">NMAAHC Freedmen's Bureau Digital Collection transcribed data</a>. Distributed by Washington, DC: Smithsonian Office of the Chief Information Officer. <a href=\"https://doi.org/10.25573/DATA.24158454.V1\">https://doi.org/10.25573/DATA.24158454.V1</a>."
+              }
+            ],
+            "dataSource": [
+              {
+                "label": "Data source",
+                "content": "Smithsonian Libraries and Archives"
+              }
+            ],
+            "identifier": [
+              {
+                "label": "Identifier",
+                "content": "170557"
+              },
+              {
+                "label": "DOI",
+                "content": "https://doi.org/10.25573/DATA.24158454.V1"
+              }
+            ],
+            "objectType": [
+              {
+                "label": "Object Type",
+                "content": "Smithsonian staff publication"
+              }
+            ]
+          },
+          "indexedStructured": {
+            "date": [
+              "2020s"
+            ],
+            "name": [
+              {
+                "type": "author",
+                "content": "Dikow, Rebecca B."
+              }
+            ],
+            "object_type": [
+              "Dataset",
+              "Smithsonian staff publications"
+            ]
+          },
+          "descriptiveNonRepeating": {
+            "title": {
+              "label": "Title",
+              "content": "NMAAHC Freedmen's Bureau Digital Collection transcribed data"
+            },
+            "record_ID": "slasro_170557",
+            "unit_code": "SLA_SRO",
+            "title_sort": "NMAAHC FREEDMEN'S BUREAU DIGITAL COLLECTION TRANSCRIBED DATA",
+            "data_source": "Smithsonian Libraries and Archives",
+            "record_link": "https://smithsonian.figshare.com/articles/dataset/NMAAHC_Freedmen_s_Bureau_Digital_Collection_transcribed_data/24158454/1",
+            "metadata_usage": {
+              "access": "CC0"
+            }
+          }
+        },
+        "hash": "f43435c6e889ac414f569236dbb03f983afb7002",
+        "docSignature": "a4e639def00c01cafd5df0a296a07889",
+        "timestamp": "1697881625",
+        "lastTimeUpdated": "1697881625",
+        "version": "1697878143"
+      }
+    ],
+    "facets": {},
+    "rowCount": 43,
+    "message": "content found"
+  }
+}

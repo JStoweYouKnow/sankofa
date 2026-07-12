@@ -257,6 +257,7 @@ function exportJSON(){
   META.lastExportAt = Date.now();
   saveMeta();
   renderBackupStatus();
+  renderChecklist();
   showToast('Backup exported');
 }
 
@@ -456,6 +457,87 @@ function renderAll(){
   renderLog();
   renderPersonFilterOptions();
   if(typeof renderPlanView === 'function') renderPlanView();
+  if(typeof renderSampleBanner === 'function') renderSampleBanner();
+  renderChecklist();
+}
+
+// ================= ONBOARDING =================
+function openWelcome(){
+  document.getElementById('welcomeOverlay').classList.add('open');
+}
+function maybeShowWelcome(){
+  if(META.welcomeSeen) return;
+  if(STATE.people.length || STATE.logs.length){
+    // existing data means they've already found their way around
+    META.welcomeSeen = true;
+    saveMeta();
+    return;
+  }
+  openWelcome();
+}
+function dismissWelcome(action){
+  META.welcomeSeen = true;
+  saveMeta();
+  closeOverlay('welcomeOverlay');
+  if(action === 'add') openPersonForm();
+  if(action === 'sample' && typeof loadSampleFamily === 'function') loadSampleFamily();
+}
+
+// Getting-started checklist: appears once the first person exists and
+// disappears when every step is done (or it's dismissed). Sample data
+// doesn't count — the point is the user's own research.
+function checklistSteps(){
+  const ownPeople = STATE.people.filter(p=>!p.sample);
+  const ownLogs = STATE.logs.filter(l=>!l.sample);
+  const ownPlanStarted = Object.keys(STATE.plans).some(id=>{
+    const person = STATE.people.find(p=>p.id===id);
+    return person && !person.sample;
+  });
+  return [
+    { label: 'Add your first person', done: ownPeople.length>0, action: 'openPersonForm()' },
+    { label: 'Start their Research Plan', done: ownPlanStarted, action: "switchView('plan')" },
+    { label: 'Run a Discovery search', done: !!META.searchedOnce, action: "switchView('toolkit')" },
+    { label: 'Log a source — hit or miss', done: ownLogs.length>0, action: 'openLogForm()' },
+    { label: 'Export a backup', done: !!META.lastExportAt, action: 'exportJSON()' }
+  ];
+}
+function renderChecklist(){
+  const el = document.getElementById('gettingStarted');
+  if(!el) return;
+  const steps = checklistSteps();
+  const doneCount = steps.filter(s=>s.done).length;
+  if(META.checklistDismissed || doneCount === 0 || doneCount === steps.length){
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `<div class="checklist-card">
+    <div class="checklist-head">
+      <span class="checklist-title">Getting started</span>
+      <span class="checklist-count">${doneCount} of ${steps.length}</span>
+      <button type="button" class="checklist-dismiss" onclick="dismissChecklist()" title="Hide this checklist">✕</button>
+    </div>
+    <div class="checklist-steps">
+      ${steps.map(s=>`<button type="button" class="checklist-step ${s.done?'done':''}" ${s.done?'disabled':`onclick="${s.action}"`}>
+        <span class="checklist-tick">${s.done?'✓':'○'}</span> ${esc(s.label)}
+      </button>`).join('')}
+    </div>
+  </div>`;
+}
+function dismissChecklist(){
+  META.checklistDismissed = true;
+  saveMeta();
+  renderChecklist();
+}
+
+// Placeholder shown in Discovery before the first search.
+function renderDiscoveryPlaceholder(){
+  const tk = document.getElementById('toolkitResults');
+  if(tk && !tk.innerHTML.trim()){
+    tk.innerHTML = `<div class="empty">
+      <div class="empty-title">Search a surname to begin</div>
+      <p>Try the family surname plus a state — e.g. "Freeman" in North Carolina. You'll get live Smithsonian results plus prefilled links into the right archives. The links need no account or key.</p>
+    </div>`;
+  }
 }
 
 // ================= FAMILY TREE =================
@@ -503,6 +585,10 @@ function renderTree(){
         </div>
       </div>
       <div class="onboard-footnote">Each person you add connects to the Research Log and Plan — every search you run, hit or miss, builds the record.</div>
+      <div class="onboard-sample-row">
+        <span>Not sure yet?</span>
+        <button class="btn btn-ghost btn-small" onclick="loadSampleFamily()">Load a sample family to explore</button>
+      </div>
     </div>`;
     return;
   }
@@ -729,9 +815,36 @@ function openPersonForm(id){
   }else{
     document.getElementById('pId').value = '';
   }
+  const editing = id ? STATE.people.find(x=>x.id===id) : null;
+  setFormSection('dnaSection', personHasDnaData(editing));
+  setFormSection('africaSection', personHasAfricaData(editing));
   document.getElementById('personOverlay').classList.add('open');
 }
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
+
+// Collapsible person-form sections: DNA and Bridge-to-Africa stay out
+// of a first-timer's way until they have data for them.
+function setFormSection(id, open){
+  const body = document.getElementById(id);
+  const btn = document.getElementById(id + 'Toggle');
+  if(!body || !btn) return;
+  body.classList.toggle('collapsed', !open);
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  const caret = btn.querySelector('.toggle-caret');
+  if(caret) caret.textContent = open ? '▾' : '▸';
+}
+function toggleFormSection(id){
+  const body = document.getElementById(id);
+  if(!body) return;
+  setFormSection(id, body.classList.contains('collapsed'));
+}
+function personHasDnaData(p){
+  return !!(p && p.dna && Object.values(p.dna).some(v=>v));
+}
+function personHasAfricaData(p){
+  if(!p || !p.africa) return false;
+  return !!(p.africa.africanBornMention || Object.entries(p.africa).some(([k,v])=>k!=='regionConfidence' && v));
+}
 
 function savePerson(e){
   e.preventDefault();
@@ -1173,6 +1286,11 @@ function runDiscovery(){
   }
 
   RESULT_CACHE = [];
+  if(!META.searchedOnce){
+    META.searchedOnce = true;
+    saveMeta();
+    renderChecklist();
+  }
   const placeLabel = ctx.state || 'any place';
   const nameLabel = [ctx.givenName, ctx.surname].filter(Boolean).join(' ');
   results.innerHTML = `
@@ -1236,4 +1354,14 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   await loadData();
   await loadKeys();
   if(typeof initSync === 'function') await initSync();
+  renderDiscoveryPlaceholder();
+  // app.html?sample=1 (linked from the landing page) drops straight
+  // into the sample family instead of the welcome modal.
+  const wantsSample = typeof location !== 'undefined' && /[?&]sample=1/.test(location.search);
+  if(wantsSample && typeof loadSampleFamily === 'function'){
+    if(!META.welcomeSeen){ META.welcomeSeen = true; saveMeta(); }
+    loadSampleFamily();
+  }else{
+    maybeShowWelcome();
+  }
 });
