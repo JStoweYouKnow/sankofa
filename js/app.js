@@ -28,9 +28,9 @@ const storage = {
   }
 };
 
-const STORAGE_KEY = 'sankofa-genealogy-data-v1';
-const KEYS_STORAGE_KEY = 'sankofa-api-keys-v1';
-const META_KEY = 'sankofa-meta-v1';
+const STORAGE_KEY = 'forebear-genealogy-data-v1';
+const KEYS_STORAGE_KEY = 'forebear-api-keys-v1';
+const META_KEY = 'forebear-meta-v1';
 const SCHEMA_VERSION = 4;
 let STATE = { people: [], logs: [], plans: {}, tombstones: [] };
 let META = { lastExportAt: 0, lastChangedAt: 0 };
@@ -253,7 +253,7 @@ function exportJSON(){
     return;
   }
   const payload = Object.assign({ exportedAt: new Date().toISOString() }, currentPayload());
-  downloadFile('sankofa-backup-' + todayStr() + '.json', JSON.stringify(payload, null, 2), 'application/json');
+  downloadFile('forebear-backup-' + todayStr() + '.json', JSON.stringify(payload, null, 2), 'application/json');
   META.lastExportAt = Date.now();
   saveMeta();
   renderBackupStatus();
@@ -268,7 +268,7 @@ document.getElementById('importFile').addEventListener('change', async (e)=>{
     const text = await file.text();
     const parsed = JSON.parse(text);
     if(!Array.isArray(parsed.people) || !Array.isArray(parsed.logs)){
-      throw new Error('this is not a Sankofa backup (missing people/logs)');
+      throw new Error('this is not a Forebear backup (missing people/logs)');
     }
     const migrated = migrate(parsed);
     migrated.people = migrated.people.filter(p=>p && p.id && p.name);
@@ -362,13 +362,13 @@ function exportGEDCOM(){
   const lines = [
     '0 HEAD',
     '1 SOUR SANKOFA',
-    '2 NAME Sankofa',
+    '2 NAME Forebear',
     '1 GEDC',
     '2 VERS 5.5.1',
     '2 FORM LINEAGE-LINKED',
     '1 CHAR UTF-8'
   ];
-  gedNote(lines, 1, 'Exported from Sankofa. Sex is not tracked, so partners in family records are assigned to HUSB/WIFE arbitrarily.');
+  gedNote(lines, 1, 'Exported from Forebear. Sex is not tracked, so partners in family records are assigned to HUSB/WIFE arbitrarily.');
 
   STATE.people.forEach(p=>{
     lines.push('0 ' + idFor.get(p.id) + ' INDI');
@@ -409,7 +409,7 @@ function exportGEDCOM(){
   });
 
   lines.push('0 TRLR');
-  downloadFile('sankofa-' + todayStr() + '.ged', lines.join('\n') + '\n', 'text/plain');
+  downloadFile('forebear-' + todayStr() + '.ged', lines.join('\n') + '\n', 'text/plain');
   showToast('GEDCOM exported');
 }
 

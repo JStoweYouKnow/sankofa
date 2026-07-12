@@ -1,8 +1,8 @@
-# Sankofa
+# Forebear
 
 *"Se wo were fi na wosankofa a yenkyi" — it is not wrong to go back for that which you have forgotten.*
 
-Sankofa is an ancestry discovery companion built for the specific challenges of Black American genealogy: the "1870 brick wall," Freedmen's Bureau records, and the fact that there's no single database that covers this research. It's a static, single-page web app — no build step, no backend required to run it. Optional family sync is available if you deploy the small endpoint in this repo.
+Forebear is an ancestry discovery companion built for the specific challenges of Black American genealogy: the "1870 brick wall," Freedmen's Bureau records, and the fact that there's no single database that covers this research. It's a static, single-page web app — no build step, no backend required to run it. Optional family sync is available if you deploy the small endpoint in this repo.
 
 ## What it does
 
@@ -30,7 +30,7 @@ Then open the printed URL in your browser.
 ## Project structure
 
 ```
-sankofa/
+forebear/
 ├── index.html        # markup
 ├── css/styles.css    # all styling (design tokens as CSS custom properties)
 ├── js/sources.js     # source registry: the record collections Discovery links into

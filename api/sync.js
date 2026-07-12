@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// Sankofa family sync endpoint (optional — see README "Family sync").
+// Forebear family sync endpoint (optional — see README "Family sync").
 //
 // Deploy this repo to Vercel and attach an Upstash Redis integration
 // from the Vercel Marketplace; this function reads whichever env-var
@@ -10,7 +10,7 @@
 //   GET  /api/sync?code=<family-code>   Authorization: Bearer <passphrase>
 //     -> 200 {payload, updatedAt} | 404 if the code has no data yet
 //   PUT  /api/sync?code=<family-code>   Authorization: Bearer <passphrase>
-//     body: the Sankofa payload {schemaVersion, people, logs, ...}
+//     body: the Forebear payload {schemaVersion, people, logs, ...}
 //     -> 200 {ok:true}
 // The first PUT for a code claims it: the passphrase's hash is stored
 // and every later request must present the same passphrase.
@@ -72,7 +72,7 @@ module.exports = async (req, res) => {
     if(!/^[A-Za-z0-9_-]{3,40}$/.test(code)) return send(res, 400, { error: 'Family code must be 3-40 letters, numbers, dashes, or underscores.' });
     if(!pass) return send(res, 401, { error: 'Missing passphrase.' });
 
-    const key = 'sankofa:' + code;
+    const key = 'forebear:' + code;
     const hash = hashPass(code, pass);
     const raw = await redis(env, ['GET', key]);
     const record = raw ? JSON.parse(raw) : null;
@@ -90,7 +90,7 @@ module.exports = async (req, res) => {
         return send(res, 400, { error: 'Body must be JSON.' });
       }
       if(!payload || !Array.isArray(payload.people) || !Array.isArray(payload.logs)){
-        return send(res, 400, { error: 'Payload must be a Sankofa backup ({people, logs, ...}).' });
+        return send(res, 400, { error: 'Payload must be a Forebear backup ({people, logs, ...}).' });
       }
       const updatedAt = Date.now();
       const serialized = JSON.stringify({ passHash: hash, payload, updatedAt });

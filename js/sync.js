@@ -12,7 +12,7 @@
 // to the configured endpoint as a bearer token — use HTTPS.
 // ---------------------------------------------------------------
 
-const SYNC_KEY = 'sankofa-sync-v1';
+const SYNC_KEY = 'forebear-sync-v1';
 let SYNC = { endpoint: '', code: '', passphrase: '', lastSyncAt: 0 };
 let syncing = false;
 let syncTimer = null;
