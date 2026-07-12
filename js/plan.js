@@ -195,6 +195,11 @@ function renderPlanView(){
   });
 
   container.innerHTML = html;
+  // Scroll the first open ("You are here") step into view without jarring the user
+  requestAnimationFrame(()=>{
+    const current = container.querySelector('.plan-step.current');
+    if(current) current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
 }
 
 function planLogBtn(prefill, label){
@@ -451,9 +456,58 @@ function runAfricaDiscovery(){
 }
 
 // ---------- interactions ----------
+// Parse a free-text birthplace like "Gaston County, NC" or "Barbados" into
+// { state, county } using the known place list plus common abbreviations.
+function parseBirthplace(str){
+  if(!str) return {};
+  const STATE_ABBREV = {
+    AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',
+    CO:'Colorado',CT:'Connecticut',DE:'Delaware',DC:'District of Columbia',
+    FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',
+    IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',
+    ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',
+    MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',
+    NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',
+    NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',
+    OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',
+    SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',
+    VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming'
+  };
+  const allPlaces = [];
+  if(typeof PLACE_GROUPS !== 'undefined'){
+    PLACE_GROUPS.forEach(g=>g.places.forEach(p=>allPlaces.push(p)));
+  }
+  const parts = str.split(/[,;]/).map(s=>s.trim()).filter(Boolean);
+  let state = '';
+  let county = '';
+  for(let i = parts.length - 1; i >= 0; i--){
+    const p = parts[i];
+    const found = allPlaces.find(pl=>pl.toLowerCase()===p.toLowerCase());
+    if(found){ state=found; parts.splice(i,1); break; }
+    const abbr = p.replace(/\.$/, '').toUpperCase();
+    if(STATE_ABBREV[abbr]){ state=STATE_ABBREV[abbr]; parts.splice(i,1); break; }
+  }
+  if(state && parts.length > 0){
+    county = parts[parts.length-1].replace(/\s+county$/i,'').replace(/\s+parish$/i,'').trim();
+  }
+  return { state, county };
+}
+
 function selectPlanPerson(id){
   activePlanPersonId = id;
-  if(id) ensurePlan(id);
+  if(id){
+    ensurePlan(id);
+    // Auto-seed state/county from birthplace when the plan is fresh
+    const plan = STATE.plans[id];
+    if(!plan.state){
+      const person = STATE.people.find(p=>p.id===id);
+      if(person && person.birthplace){
+        const parsed = parseBirthplace(person.birthplace);
+        if(parsed.state) plan.state = parsed.state;
+        if(parsed.county && !plan.county) plan.county = parsed.county;
+      }
+    }
+  }
   saveData();
   renderPlanView();
 }
@@ -488,6 +542,21 @@ function setPlanChecked(sourceId, checked){
   touchPlan();
   saveData();
   renderPlanView();
+  // Nudge "mark step done" when all listed sources are now checked
+  if(checked && !plan.steps.records.done){
+    const person = STATE.people.find(p=>p.id===activePlanPersonId);
+    if(person){
+      const ctx = planCtx(person, plan);
+      const sources = typeof planChecklistLinks==='function'
+        ? planChecklistLinks(ctx)
+        : (typeof buildQuickLinks==='function' ? buildQuickLinks(ctx).filter(s=>s.planChecklist) : []);
+      const allChecked = sources.length>0 && sources.every(s=>!!plan.steps.records.checked[s.id]);
+      if(allChecked){
+        const doneLabel = document.querySelector('#plan-step-records .plan-check');
+        if(doneLabel){ doneLabel.classList.add('nudge-done'); setTimeout(()=>doneLabel.classList.remove('nudge-done'), 3500); }
+      }
+    }
+  }
 }
 function addCandidate(){
   const plan = activePlan();
@@ -534,6 +603,27 @@ function runPlanDiscovery(candidateName){
   switchView('toolkit');
   runDiscovery();
 }
+// Called from a tree-card "Discover" button — pre-fills Discovery from
+// whatever we know about this person and runs the search.
+function discoverPerson(personId, ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  const person = STATE.people.find(p=>p.id===personId);
+  if(!person) return;
+  activePlanPersonId = personId; // ensures +Log from Discovery pre-fills this person
+  const plan = STATE.plans[personId];
+  fillDiscoveryForm({
+    givenName: planGiven(person),
+    surname: planSurname(person),
+    variants: person.nameVariants || [],
+    state: (plan && plan.state) || '',
+    county: (plan && plan.county) || '',
+    city: '',
+    enslaver: person.enslaverSurname || ''
+  });
+  switchView('toolkit');
+  runDiscovery();
+}
+
 // Jump to Discovery with the family surname + this candidate as the
 // possible enslaver, and run the search.
 function runCandidateDiscovery(i){

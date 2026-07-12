@@ -555,6 +555,18 @@
   }
   .plan-next-chip:hover{background:rgba(150,105,43,0.18);}
   .plan-next-chip.done{color:var(--green);border-color:rgba(75,99,80,0.4);background:rgba(75,99,80,0.08);}
+  .discover-chip{
+    display:block;width:100%;margin-top:5px;text-align:left;
+    font-family:'Courier Prime',monospace;
+    font-size:10px;text-transform:uppercase;letter-spacing:0.4px;
+    color:var(--indigo);background:rgba(44,58,85,0.07);
+    border:1px solid rgba(44,58,85,0.28);border-radius:2px;
+    padding:5px 8px;cursor:pointer;line-height:1.35;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .discover-chip:hover{background:rgba(44,58,85,0.14);}
+  @keyframes nudge-pulse{0%,100%{background:transparent}50%{background:rgba(75,99,80,0.22);border-radius:3px;}}
+  .plan-check.nudge-done{animation:nudge-pulse 0.7s ease-in-out 3;}
   .plan-context{
     display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;
     background:var(--card);border:1px solid var(--line);border-radius:4px;
@@ -768,4 +780,57 @@
     .empty{padding:28px 16px 24px;}
     .onboarding-paths{gap:10px;}
     .onboard-path{padding:14px 12px;}
+  }
+
+  /* ---------- Rail meta row (version + feedback) ---------- */
+  .rail-meta-row{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-top:10px;
+  }
+  .beta-badge{
+    font-family:'Courier Prime',monospace;
+    font-size:10px;letter-spacing:0.5px;text-transform:uppercase;
+    color:var(--brass-light);
+    background:rgba(199,154,75,0.12);
+    border:1px solid rgba(199,154,75,0.3);
+    border-radius:2px;padding:2px 6px;
+  }
+  .feedback-link{
+    font-size:11px;color:#B9C1CE;text-decoration:none;
+    border-bottom:1px dotted rgba(185,193,206,0.4);
+    transition:color 0.15s;
+  }
+  .feedback-link:hover{color:#EFE7D3;}
+
+  /* ---------- Mobile hamburger + rail drawer ---------- */
+  .rail-toggle{
+    display:none;
+    position:fixed;top:14px;left:14px;z-index:400;
+    width:38px;height:38px;
+    background:var(--indigo);color:#EFE7D3;
+    border:none;border-radius:4px;
+    font-size:18px;cursor:pointer;
+    align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25);
+  }
+  .rail-backdrop{
+    display:none;
+    position:fixed;inset:0;
+    background:rgba(36,31,22,0.45);
+    z-index:300;
+  }
+  .rail-backdrop.open{display:block;}
+
+  @media (max-width:700px){
+    .rail-toggle{display:flex;}
+    .rail{
+      position:fixed;top:0;left:-260px;
+      width:260px;height:100%;
+      z-index:350;
+      transition:left 0.22s ease;
+    }
+    .rail.open{left:0;}
+    .main{padding-top:60px;} /* room for the hamburger button */
+    .view-head{flex-direction:column;align-items:flex-start;gap:10px;}
+    .view-head button{align-self:flex-start;}
   }

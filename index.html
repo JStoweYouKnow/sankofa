@@ -3,13 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Sankofa helps Black Americans trace ancestors past the 1870 brick wall — Freedmen's Bureau, Freedman's Bank, slave schedules, and Bridge to Africa. Free, private, browser-based.">
+<meta name="theme-color" content="#2C3A55">
 <title>Sankofa — Ancestry Discovery Companion</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%232C3A55' rx='5'/><text x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='20' fill='%23C79A4B' font-weight='bold'>S</text></svg>">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
+<button class="rail-toggle" id="railToggle" aria-label="Open menu" aria-expanded="false">&#9776;</button>
+<div class="rail-backdrop" id="railBackdrop"></div>
+
 <div class="app">
-  <div class="rail">
+  <div class="rail" id="appRail">
     <div class="brand">
       <div class="brand-mark">S</div>
       <div class="brand-name">Sankofa</div>
@@ -33,6 +39,10 @@
         <button type="button" onclick="openSyncModal()">⇄ Family sync</button>
       </div>
       <div id="privacyNote" style="margin-top:8px;">Data stays in this browser unless you export a backup or turn on Family sync.</div>
+      <div class="rail-meta-row">
+        <span class="beta-badge">v0.1-beta</span>
+        <a class="feedback-link" href="https://github.com/JStoweYouKnow/sankofa/issues/new?labels=beta-feedback&template=beta_feedback.md" target="_blank" rel="noopener">Give feedback</a>
+      </div>
       <input type="file" id="importFile" accept=".json,application/json" style="display:none">
     </div>
   </div>
@@ -401,7 +411,7 @@
         </div>
         <div class="field">
           <label>Status</label>
-          <select id="lStatus">
+          <select id="lStatus" onchange="syncLogConfidence(this.value)">
             <option value="to-research">To research</option>
             <option value="promising">Promising lead</option>
             <option value="confirmed">Confirmed</option>

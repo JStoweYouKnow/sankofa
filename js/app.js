@@ -182,8 +182,16 @@ async function saveData(triggerSync){
     saveMeta();
     renderBackupStatus();
   }catch(e){
-    console.error('save failed', e);
-    showToast('Could not save');
+    const isQuota = e && (e.name==='QuotaExceededError' || /quota/i.test(e.message||''));
+    if(isQuota){
+      // Browser storage is full: warn clearly and trigger an emergency export
+      showToast('Browser storage is full — downloading an emergency backup now.');
+      console.warn('localStorage quota exceeded — triggering emergency export', e);
+      setTimeout(exportJSON, 400);
+    }else{
+      console.error('save failed', e);
+      showToast('Could not save — check that browser storage is enabled.');
+    }
   }
   if(triggerSync !== false && typeof scheduleSync === 'function') scheduleSync();
 }
@@ -407,13 +415,39 @@ function exportGEDCOM(){
 
 // ---------- nav ----------
 document.querySelectorAll('.nav-item').forEach(item=>{
-  item.addEventListener('click', ()=>switchView(item.dataset.view));
+  item.addEventListener('click', ()=>{
+    switchView(item.dataset.view);
+    // On mobile, close the rail drawer after selecting a view
+    closeRail();
+  });
 });
 function switchView(view){
   document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active', i.dataset.view===view));
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
   if(view==='tree') requestAnimationFrame(drawConnectors);
+}
+
+// ---------- mobile rail drawer ----------
+(function initMobileNav(){
+  const toggle = document.getElementById('railToggle');
+  const rail   = document.getElementById('appRail');
+  const backdrop = document.getElementById('railBackdrop');
+  if(!toggle || !rail || !backdrop) return;
+  toggle.addEventListener('click', ()=>{
+    const open = rail.classList.toggle('open');
+    backdrop.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+  });
+  backdrop.addEventListener('click', closeRail);
+})();
+function closeRail(){
+  const rail = document.getElementById('appRail');
+  const backdrop = document.getElementById('railBackdrop');
+  const toggle = document.getElementById('railToggle');
+  if(rail) rail.classList.remove('open');
+  if(backdrop) backdrop.classList.remove('open');
+  if(toggle) toggle.setAttribute('aria-expanded', 'false');
 }
 
 // ---------- render all ----------
@@ -504,6 +538,7 @@ function renderTree(){
       const nextLine = next
         ? `<button type="button" class="plan-next-chip ${next.key==='done'?'done':''}" onclick="openPlanForPerson('${esc(p.id)}', event)" title="${esc(next.title)}">${esc(next.short)}</button>`
         : '';
+      const discoverLine = `<button type="button" class="discover-chip" onclick="discoverPerson('${esc(p.id)}', event)" title="Search Discovery for ${esc(p.name)}">&#x2315; Search Discovery</button>`;
       html += `<div class="person-card" data-person-id="${esc(p.id)}" onclick="openPersonForm('${esc(p.id)}')">
         ${src>0?`<div class="source-badge" title="${src} linked source(s)">${src}</div>`:''}
         <div class="record-no">No. ${esc(p.id.slice(-4).toUpperCase())}</div>
@@ -521,6 +556,7 @@ function renderTree(){
         })()}
         ${facts.length?`<div class="evidence-row" title="Facts supported by confirmed sources">${facts.map(f=>`<span class="fact-chip">${esc(FACT_LABELS[f]||f)}</span>`).join('')}</div>`:''}
         ${nextLine}
+        ${discoverLine}
       </div>`;
     });
     html += `</div></div>`;
@@ -699,6 +735,14 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('open');
 
 function savePerson(e){
   e.preventDefault();
+  const nameInput = document.getElementById('pName');
+  if(!nameInput.value.trim()){
+    nameInput.setCustomValidity('Please enter at least a name or identifier for this person.');
+    nameInput.reportValidity();
+    nameInput.setCustomValidity('');
+    return false;
+  }
+  const isNewPerson = !document.getElementById('pId').value;
   const id = document.getElementById('pId').value || uid();
   const parentIds = Array.from(document.querySelectorAll('.parent-check:checked')).map(cb=>cb.value);
   const spouses = Array.from(document.querySelectorAll('.spouse-check:checked')).map(cb=>{
@@ -749,6 +793,10 @@ function savePerson(e){
   closeOverlay('personOverlay');
   renderAll();
   saveData();
+  // Nudge first-time users to export once they've added their first person
+  if(isNewPerson && STATE.people.length === 1 && !META.lastExportAt){
+    setTimeout(()=>showToast('First ancestor added — export a backup when you\'re done with your session.'), 900);
+  }
   return false;
 }
 // spouse links are symmetric: mirror this person's spouse list onto everyone else
@@ -1144,8 +1192,21 @@ function runDiscovery(){
   searchSmithsonian(document.getElementById('liveSmithsonian'), ctx);
 }
 
+function syncLogConfidence(status){
+  const conf = document.getElementById('lConfidence');
+  if(!conf) return;
+  const map = { confirmed:'documentary', found:'documentary', 'not-found':'speculative', 'to-research':'speculative', 'dead-end':'speculative', promising:'oral' };
+  if(map[status]) conf.value = map[status];
+}
+
 function queueLogFromResult(c){
-  openLogForm(null, { sourceName: c.label, citation: c.url, type: c.type || "Freedmen's Bureau Record", findings: '' });
+  openLogForm(null, {
+    sourceName: c.label,
+    citation: c.url,
+    type: c.type || "Freedmen's Bureau Record",
+    findings: '',
+    personId: (typeof activePlanPersonId !== 'undefined' && activePlanPersonId) || ''
+  });
 }
 
 // ---------- init ----------
