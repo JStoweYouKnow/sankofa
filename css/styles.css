@@ -478,6 +478,74 @@
     font-size:12.5px;color:var(--ink-faint);
   }
 
+  /* search sessions: coverage bar + per-card status */
+  .session-bar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:var(--card);
+    border:1px solid var(--line);border-left:3px solid var(--brass);
+    border-radius:3px;padding:9px 12px;margin-bottom:16px;
+    font-size:12px;color:var(--ink-soft);
+  }
+  .session-bar.session-hint{border-left-color:var(--line);font-style:italic;color:var(--ink-faint);}
+  .session-cover strong{color:var(--ink);}
+  .session-when{margin-left:auto;font-family:'Courier Prime',monospace;font-size:10px;color:var(--ink-faint);}
+  .check-chip{
+    font-family:'Courier Prime',monospace;
+    font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;
+    padding:2px 7px;border-radius:8px;white-space:nowrap;
+  }
+  .check-found{background:rgba(94,138,108,0.15);color:var(--green);}
+  .check-nothing{background:rgba(94,80,56,0.18);color:var(--ink-faint);}
+  .check-opened{background:rgba(212,148,58,0.14);color:var(--brass);}
+  .result-card.checked-nothing{opacity:0.55;}
+  .result-card.checked-found{border-left:3px solid var(--green);}
+  .result-card.checked-opened{border-left:3px solid var(--brass);}
+  .resolve-row{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;}
+
+  /* variant chips on key collection cards */
+  .variant-chip-row{
+    margin-top:7px;font-size:11px;color:var(--ink-faint);
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  }
+  .variant-chip{
+    font-family:'Courier Prime',monospace;font-size:10.5px;
+    color:var(--brass);text-decoration:none;
+    border:1px solid var(--line);border-radius:10px;padding:2px 9px;
+    transition:border-color .15s ease;
+  }
+  .variant-chip:hover{border-color:var(--brass);}
+
+  /* collapsible collection groups */
+  .group-toggle{
+    display:flex;align-items:baseline;gap:8px;width:100%;
+    background:none;border:none;cursor:pointer;padding:0 0 10px;
+    text-align:left;
+  }
+  .group-toggle .toggle-caret{
+    font-size:10px;color:var(--brass);width:10px;
+  }
+  .group-toggle .group-title{
+    font-family:'Courier Prime',monospace;
+    font-size:11px;text-transform:uppercase;letter-spacing:1px;
+    color:var(--ink-faint);
+  }
+  .group-toggle:hover .group-title{color:var(--brass);}
+  .link-group.collapsed .group-body{display:none;}
+
+  /* live results summary chips */
+  .live-summary{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .live-chip{
+    font-family:'Courier Prime',monospace;
+    font-size:10.5px;letter-spacing:0.3px;
+    border:1px solid var(--line);border-radius:10px;
+    padding:3px 10px;color:var(--ink-soft);
+  }
+  .live-chip.muted{color:var(--ink-faint);border-style:dashed;}
+  .live-chip.err{color:var(--oxblood, #a05252);border-color:currentColor;}
+  .live-source{display:flex;flex-direction:column;gap:12px;}
+  .live-source:empty{display:none;}
+  #liveResults{gap:12px;}
+
   /* getting-started checklist */
   .checklist-card{
     background:var(--card);

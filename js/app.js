@@ -31,8 +31,8 @@ const storage = {
 const STORAGE_KEY = 'forebear-genealogy-data-v1';
 const KEYS_STORAGE_KEY = 'forebear-api-keys-v1';
 const META_KEY = 'forebear-meta-v1';
-const SCHEMA_VERSION = 4;
-let STATE = { people: [], logs: [], plans: {}, tombstones: [] };
+const SCHEMA_VERSION = 5;
+let STATE = { people: [], logs: [], plans: {}, tombstones: [], sessions: {} };
 let META = { lastExportAt: 0, lastChangedAt: 0 };
 let API_KEYS = { smithsonian: '' };
 let editingPersonId = null;
@@ -78,6 +78,8 @@ function migrate(parsed){
   const logs = parsed.logs || [];
   const plans = parsed.plans || {};
   const tombstones = parsed.tombstones || [];
+  // v5: per-search "sessions" tracking which collections were checked
+  const sessions = parsed.sessions || {};
   const v = parsed.schemaVersion || 1;
   if(v < 2){
     people.forEach(p=>{
@@ -107,7 +109,7 @@ function migrate(parsed){
   }else{
     people.forEach(p=>{ if(typeof ensurePersonAfrica === 'function') ensurePersonAfrica(p); });
   }
-  return { schemaVersion: SCHEMA_VERSION, people, logs, plans, tombstones };
+  return { schemaVersion: SCHEMA_VERSION, people, logs, plans, tombstones, sessions };
 }
 
 function currentPayload(){
@@ -116,7 +118,8 @@ function currentPayload(){
     people: STATE.people,
     logs: STATE.logs,
     plans: STATE.plans,
-    tombstones: STATE.tombstones
+    tombstones: STATE.tombstones,
+    sessions: STATE.sessions
   };
 }
 function setState(payload){
@@ -124,6 +127,7 @@ function setState(payload){
   STATE.logs = payload.logs;
   STATE.plans = payload.plans || {};
   STATE.tombstones = payload.tombstones || [];
+  STATE.sessions = payload.sessions || {};
 }
 
 // Merge two payloads: per-record newest-updatedAt wins, deletions win
@@ -155,7 +159,12 @@ function mergeStates(a, b){
     const pa = (a.plans||{})[id], pb = (b.plans||{})[id];
     plans[id] = !pa ? pb : (!pb ? pa : ((pb.updatedAt||0) > (pa.updatedAt||0) ? pb : pa));
   });
-  return { schemaVersion: SCHEMA_VERSION, people, logs, plans, tombstones: Array.from(tomb.values()) };
+  const sessions = {};
+  new Set([...Object.keys(a.sessions||{}), ...Object.keys(b.sessions||{})]).forEach(key=>{
+    const sa = (a.sessions||{})[key], sb = (b.sessions||{})[key];
+    sessions[key] = !sa ? sb : (!sb ? sa : ((sb.updatedAt||0) > (sa.updatedAt||0) ? sb : sa));
+  });
+  return { schemaVersion: SCHEMA_VERSION, people, logs, plans, tombstones: Array.from(tomb.values()), sessions };
 }
 
 async function loadData(){
@@ -1195,11 +1204,156 @@ function resultCard(c){
   </div>`;
 }
 document.getElementById('toolkitResults').addEventListener('click', e=>{
-  const btn = e.target.closest('[data-log-idx]');
-  if(!btn) return;
-  const c = RESULT_CACHE[Number(btn.dataset.logIdx)];
-  if(c) queueLogFromResult(c);
+  const logBtn = e.target.closest('[data-log-idx]');
+  if(logBtn){
+    const c = RESULT_CACHE[Number(logBtn.dataset.logIdx)];
+    if(c) queueLogFromResult(c);
+    return;
+  }
+  const resolveBtn = e.target.closest('[data-resolve]');
+  if(resolveBtn){
+    resolveSource(resolveBtn.dataset.srcId, resolveBtn.dataset.resolve);
+    return;
+  }
+  const groupBtn = e.target.closest('[data-group-toggle]');
+  if(groupBtn){
+    const grp = groupBtn.closest('.link-group');
+    grp.classList.toggle('collapsed');
+    const caret = groupBtn.querySelector('.toggle-caret');
+    if(caret) caret.textContent = grp.classList.contains('collapsed') ? '▸' : '▾';
+    return;
+  }
+  // "Open" on a collection card (or a variant chip): let the new tab
+  // open normally, but remember that this collection was checked.
+  const openLink = e.target.closest('a[data-src-id]');
+  if(openLink) markSourceOpened(openLink.dataset.srcId);
 });
+
+// ================= SEARCH SESSIONS =================
+// A session remembers, per surname+place, which collections were
+// opened and how they resolved — so nobody re-searches a dead end.
+// Sessions live in STATE.sessions (saved, backed up, synced).
+let ACTIVE_SESSION_KEY = '';
+let LAST_DISCOVERY_CTX = null;
+let QUICKLINK_CACHE = {};
+
+function sessionKey(ctx){
+  return [String(ctx.surname||'').toLowerCase(), String(ctx.state||'').toLowerCase(), String(ctx.county||'').toLowerCase()].join('|');
+}
+function getOrCreateSession(ctx){
+  const key = sessionKey(ctx);
+  if(!STATE.sessions[key]){
+    STATE.sessions[key] = {
+      key,
+      surname: ctx.surname, givenName: ctx.givenName || '',
+      state: ctx.state || '', county: ctx.county || '',
+      variants: normalizeVariants(ctx.variants),
+      createdAt: Date.now(), updatedAt: Date.now(),
+      checks: {}
+    };
+    pruneSessions();
+  }else{
+    const s = STATE.sessions[key];
+    if(ctx.givenName) s.givenName = ctx.givenName;
+    const vars = normalizeVariants(ctx.variants);
+    if(vars.length) s.variants = vars;
+  }
+  ACTIVE_SESSION_KEY = key;
+  return STATE.sessions[key];
+}
+function activeSession(){
+  return STATE.sessions[ACTIVE_SESSION_KEY] || null;
+}
+function pruneSessions(){
+  const keys = Object.keys(STATE.sessions);
+  if(keys.length <= 25) return;
+  keys.sort((a,b)=>(STATE.sessions[a].updatedAt||0)-(STATE.sessions[b].updatedAt||0));
+  keys.slice(0, keys.length - 25).forEach(k=>delete STATE.sessions[k]);
+}
+
+function markSourceOpened(sourceId){
+  const s = activeSession();
+  if(!s || !sourceId) return;
+  // don't downgrade an already-resolved collection back to "opened"
+  if(s.checks[sourceId] && s.checks[sourceId].status !== 'opened') return;
+  s.checks[sourceId] = { status: 'opened', at: Date.now() };
+  s.updatedAt = Date.now();
+  saveData();
+  // re-render after the new tab has been launched
+  setTimeout(()=>{ renderQuickLinksForActive(); renderSessionSummary(); }, 60);
+}
+function resolveSource(sourceId, status){
+  const s = activeSession();
+  const card = QUICKLINK_CACHE[sourceId];
+  if(!s || !card || (status !== 'found' && status !== 'nothing')) return;
+  s.checks[sourceId] = { status, at: Date.now() };
+  s.updatedAt = Date.now();
+  if(status === 'nothing'){
+    const place = [s.county, s.state].filter(Boolean).join(', ');
+    STATE.logs.push({
+      id: uid(),
+      date: todayStr(),
+      personId: (typeof activePlanPersonId !== 'undefined' && activePlanPersonId) || '',
+      type: card.type || 'Other',
+      status: 'dead-end',
+      sourceName: card.label,
+      citation: card.url,
+      findings: 'Searched "' + s.surname + '"'
+        + (s.variants && s.variants.length ? ' (and variants: ' + s.variants.join(', ') + ')' : '')
+        + (place ? ' in ' + place : '') + ' — nothing found.',
+      nextSteps: '',
+      supports: [],
+      confidence: 'speculative',
+      updatedAt: Date.now()
+    });
+  }
+  saveData();
+  renderAll();
+  renderQuickLinksForActive();
+  renderSessionSummary();
+  if(status === 'found'){
+    openLogForm(null, {
+      sourceName: card.label,
+      citation: card.url,
+      type: card.type,
+      personId: (typeof activePlanPersonId !== 'undefined' && activePlanPersonId) || ''
+    });
+  }
+}
+function renderQuickLinksForActive(){
+  const container = document.getElementById('quickLinks');
+  if(container && LAST_DISCOVERY_CTX) renderQuickLinks(container, LAST_DISCOVERY_CTX);
+}
+function sessionStatusHtml(sourceId){
+  const s = activeSession();
+  const check = s && s.checks[sourceId];
+  if(!check) return '';
+  const when = new Date(check.at).toLocaleDateString();
+  if(check.status === 'found') return `<span class="check-chip check-found">✓ found · ${esc(when)}</span>`;
+  if(check.status === 'nothing') return `<span class="check-chip check-nothing">dead end · ${esc(when)}</span>`;
+  return `<span class="check-chip check-opened">opened · ${esc(when)}</span>`;
+}
+function renderSessionSummary(){
+  const el = document.getElementById('sessionSummary');
+  const s = activeSession();
+  if(!el) return;
+  if(!s){ el.innerHTML = ''; return; }
+  const ids = Object.keys(QUICKLINK_CACHE);
+  const count = st => ids.filter(id=>s.checks[id] && s.checks[id].status===st).length;
+  const found = count('found'), nothing = count('nothing'), opened = count('opened');
+  const resolved = found + nothing;
+  if(resolved + opened === 0){
+    el.innerHTML = `<div class="session-bar session-hint">Forebear remembers this search — open a collection and it's tracked here, so you never re-check a dead end.</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="session-bar">
+    <span class="session-cover">Coverage: <strong>${resolved} of ${ids.length}</strong> collections resolved</span>
+    ${found ? `<span class="check-chip check-found">✓ ${found} found</span>` : ''}
+    ${nothing ? `<span class="check-chip check-nothing">${nothing} dead end${nothing>1?'s':''}</span>` : ''}
+    ${opened ? `<span class="check-chip check-opened">${opened} opened, unresolved</span>` : ''}
+    <span class="session-when">last activity ${esc(new Date(s.updatedAt).toLocaleDateString())}</span>
+  </div>`;
+}
 function strategyCard(enslaver, county, state){
   return `<div class="strategy-card" style="margin-top:14px;">
     <div class="result-label">Strategy: search the 1860 slave schedule under "${esc(enslaver)}"</div>
@@ -1221,11 +1375,25 @@ function extractFreetext(row){
   }catch(e){}
   return '';
 }
+// Per-source hit counts for the live results summary bar.
+let LIVE_COUNTS = {};
+function updateLiveSummary(source, text, cls){
+  LIVE_COUNTS[source] = { text, cls: cls || '' };
+  const el = document.getElementById('liveSummary');
+  if(!el) return;
+  el.innerHTML = Object.keys(LIVE_COUNTS).map(k=>{
+    const v = LIVE_COUNTS[k];
+    return `<span class="live-chip ${esc(v.cls)}">${esc(k)}: ${esc(v.text)}</span>`;
+  }).join('');
+}
+
 async function searchSmithsonian(container, ctx){
   if(!API_KEYS.smithsonian){
+    updateLiveSummary('Smithsonian', 'key needed', 'muted');
     container.innerHTML = notConnectedCard('Smithsonian Open Access', 'https://api.data.gov/signup/', "Free, instant key — searches the NMAAHC's collections, including Freedmen's Bureau material, directly from here.", false);
     return;
   }
+  updateLiveSummary('Smithsonian', 'searching…', 'muted');
   container.innerHTML = loadingCard('Searching the Smithsonian Open Access API…');
   const name = [ctx.givenName, ctx.surname].filter(Boolean).join(' ') || ctx.surname;
   const q = [name, "Freedmen's Bureau", ctx.state && isUs(ctx) ? ctx.state : ''].filter(Boolean).join(' ');
@@ -1238,10 +1406,13 @@ async function searchSmithsonian(container, ctx){
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     const rows = (data && data.response && data.response.rows) || [];
+    const total = (data && data.response && data.response.rowCount) || rows.length;
     if(rows.length===0){
+      updateLiveSummary('Smithsonian', '0');
       container.innerHTML = emptyResultCard("No Smithsonian results. Try dropping the place, or search just the surname.");
       return;
     }
+    updateLiveSummary('Smithsonian', String(total));
     container.innerHTML = rows.slice(0,8).map(r=>{
       const dnr = (r.content && r.content.descriptiveNonRepeating) || {};
       const title = r.title || (dnr.title && dnr.title.content) || 'Untitled record';
@@ -1251,27 +1422,166 @@ async function searchSmithsonian(container, ctx){
       return resultCard({label: title, note, url: link, type: "Freedmen's Bureau Record", source: 'Smithsonian'});
     }).join('');
   }catch(e){
+    updateLiveSummary('Smithsonian', 'error', 'err');
     container.innerHTML = errorCard('Smithsonian Open Access', apiErrorMessage(e));
   }
 }
 
+// ---------- live search: Chronicling America (LOC) ----------
+// Keyless and CORS-open (verified July 2026). Historical newspapers:
+// runaway ads, "Last Seen" family-search ads, obituaries.
+async function searchLOC(container, ctx){
+  updateLiveSummary('Newspapers', 'searching…', 'muted');
+  container.innerHTML = loadingCard('Searching historical newspapers (Chronicling America)…');
+  const name = [ctx.givenName, ctx.surname].filter(Boolean).join(' ') || ctx.surname;
+  let url = 'https://www.loc.gov/collections/chronicling-america/?q=' + encodeURIComponent(name) + '&fo=json&c=6';
+  if(ctx.state && isUs(ctx)) url += '&fa=' + encodeURIComponent('location:' + ctx.state.toLowerCase());
+  try{
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=>ctrl.abort(), 15000);
+    const res = await fetch(url, {signal: ctrl.signal});
+    clearTimeout(timer);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const rows = (data && data.results) || [];
+    const total = (data && data.pagination && data.pagination.of) || rows.length;
+    if(rows.length===0){
+      updateLiveSummary('Newspapers', '0');
+      container.innerHTML = emptyResultCard('No newspaper pages matched. Try dropping the given name, or search a variant spelling.');
+      return;
+    }
+    updateLiveSummary('Newspapers', String(total));
+    container.innerHTML = rows.slice(0,6).map(r=>{
+      const year = r.date ? String(r.date).slice(0,4) : '';
+      const loc = Array.isArray(r.location) ? r.location.join(', ') : '';
+      const link = r.url && String(r.url).startsWith('http') ? r.url : ('https://www.loc.gov' + (r.url || ''));
+      return resultCard({
+        label: String(r.title || 'Untitled newspaper page'),
+        note: [year, loc].filter(Boolean).join(' — '),
+        url: link,
+        type: 'Newspaper / Advertisement',
+        source: 'Chronicling America'
+      });
+    }).join('');
+  }catch(e){
+    updateLiveSummary('Newspapers', 'error', 'err');
+    container.innerHTML = errorCard('Chronicling America', apiErrorMessage(e));
+  }
+}
+
+// ---------- live search: Internet Archive ----------
+// Keyless and CORS-open (verified July 2026). The metadata search
+// finds *place* materials — county histories, city directories,
+// church minutes — and each result link carries ?q=<surname> so the
+// book opens with the family name pre-searched inside the text.
+async function searchInternetArchive(container, ctx){
+  let placeTerm = '';
+  if(ctx.county){
+    // "Gaston" alone matches French given names; "Gaston County" finds
+    // county histories. Caribbean parishes keep their name as-is.
+    placeTerm = '"' + ctx.county + (isUs(ctx) && !/county$/i.test(ctx.county) ? ' County' : '') + '"';
+  }else if(ctxState(ctx)){
+    placeTerm = '"' + ctx.state + '"';
+  }
+  if(!placeTerm){
+    updateLiveSummary('Internet Archive', 'add a place', 'muted');
+    container.innerHTML = emptyResultCard('Add a state or county and Internet Archive will surface county histories and city directories — each opens with your surname pre-searched inside the book.');
+    return;
+  }
+  updateLiveSummary('Internet Archive', 'searching…', 'muted');
+  container.innerHTML = loadingCard('Searching Internet Archive local histories…');
+  const q = placeTerm + ' AND mediatype:texts';
+  const url = 'https://archive.org/advancedsearch.php?q=' + encodeURIComponent(q)
+    + '&fl[]=identifier&fl[]=title&fl[]=year&rows=6&page=1&output=json';
+  try{
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=>ctrl.abort(), 15000);
+    const res = await fetch(url, {signal: ctrl.signal});
+    clearTimeout(timer);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const docs = (data && data.response && data.response.docs) || [];
+    const total = (data && data.response && data.response.numFound) || docs.length;
+    if(docs.length===0){
+      updateLiveSummary('Internet Archive', '0');
+      container.innerHTML = emptyResultCard('No Internet Archive texts matched this place — try the county seat or a neighboring county.');
+      return;
+    }
+    updateLiveSummary('Internet Archive', String(total));
+    container.innerHTML = docs.slice(0,6).map(d=>resultCard({
+      label: String(d.title || d.identifier),
+      note: [d.year ? ('Published ' + d.year) : '', 'opens with "' + ctx.surname + '" pre-searched inside the text'].filter(Boolean).join(' — '),
+      url: 'https://archive.org/details/' + encodeURIComponent(d.identifier) + '?q=' + encodeURIComponent(ctx.surname),
+      type: 'Other',
+      source: 'Internet Archive'
+    })).join('');
+  }catch(e){
+    updateLiveSummary('Internet Archive', 'error', 'err');
+    container.innerHTML = errorCard('Internet Archive', apiErrorMessage(e));
+  }
+}
+
 // ---------- quick links (always available, no key required) ----------
+// Key collections get "also try" variant chips instead of extra cards.
+const VARIANT_CHIP_IDS = new Set([
+  'census-1870','census-1880','freedmans-bank','nmaahc-fb-portal',
+  'familysearch-all','chronicling-america','fs-caribbean','fs-canada','fs-england'
+]);
+
+function quickLinkCardHtml(c, ctx){
+  QUICKLINK_CACHE[c.id] = c;
+  const s = activeSession();
+  const status = s && s.checks[c.id] && s.checks[c.id].status;
+  let chips = '';
+  if(ctx && VARIANT_CHIP_IDS.has(c.id)){
+    const vlinks = variantUrlsFor(c.id, ctx);
+    if(vlinks.length){
+      chips = `<div class="variant-chip-row">also try: ${vlinks.map(v=>
+        `<a class="variant-chip" data-src-id="${esc(c.id)}" href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.variant)}</a>`
+      ).join(' ')}</div>`;
+    }
+  }
+  const resolveBtns = status === 'opened'
+    ? `<div class="resolve-row">
+        <button type="button" class="btn btn-small" data-resolve="found" data-src-id="${esc(c.id)}">✓ Found something</button>
+        <button type="button" class="btn btn-ghost btn-small" data-resolve="nothing" data-src-id="${esc(c.id)}">Nothing there</button>
+      </div>`
+    : '';
+  return `<div class="result-card ${status ? 'checked-' + status : ''}">
+    <div class="result-left">
+      <div class="result-label">${esc(c.label)} ${sessionStatusHtml(c.id)}</div>
+      <div class="result-note">${esc(c.note||'')}</div>
+      ${chips}
+      ${resolveBtns}
+    </div>
+    <div class="result-actions">
+      <a class="btn btn-small" data-src-id="${esc(c.id)}" href="${esc(c.url)}" target="_blank" rel="noopener">Open</a>
+      <button class="btn btn-ghost btn-small" data-log-idx="${cacheResult(c)}">+ Log</button>
+    </div>
+  </div>`;
+}
+
 function renderQuickLinks(container, ctx){
+  QUICKLINK_CACHE = {};
   const groups = buildQuickLinksGrouped(ctx);
-  const variants = buildVariantLinks(ctx);
+  const s = activeSession();
   let html = '';
-  groups.forEach(g=>{
-    html += `<div class="result-section" style="margin-top:18px;">
-      <div class="result-section-title">${esc(g.title)} <span class="result-count">${g.links.length}</span></div>
-      <div class="result-grid">${g.links.map(resultCard).join('')}</div>
+  groups.forEach((g, i)=>{
+    // first few groups are the contextually relevant ones (appliesTo
+    // already filtered by place); also keep any group with unresolved
+    // opened collections visible.
+    const hasPending = !!(s && g.links.some(l=>s.checks[l.id] && s.checks[l.id].status === 'opened'));
+    const open = i < 3 || hasPending;
+    const checkedCount = s ? g.links.filter(l=>s.checks[l.id] && s.checks[l.id].status !== 'opened').length : 0;
+    html += `<div class="result-section link-group ${open ? '' : 'collapsed'}" style="margin-top:18px;">
+      <button type="button" class="group-toggle" data-group-toggle>
+        <span class="toggle-caret">${open ? '▾' : '▸'}</span>
+        <span class="group-title">${esc(g.title)}</span>
+        <span class="result-count">${checkedCount ? checkedCount + ' checked / ' : ''}${g.links.length}</span>
+      </button>
+      <div class="result-grid group-body">${g.links.map(l=>quickLinkCardHtml(l, ctx)).join('')}</div>
     </div>`;
   });
-  if(variants.length){
-    html += `<div class="result-section" style="margin-top:18px;">
-      <div class="result-section-title">Also try these spellings <span class="result-count">${variants.length}</span></div>
-      <div class="result-grid">${variants.map(resultCard).join('')}</div>
-    </div>`;
-  }
   container.innerHTML = html || `<div class="empty"><p>No collections matched this place — try clearing the place filter or pick a nearby region.</p></div>`;
 }
 
@@ -1291,22 +1601,37 @@ function runDiscovery(){
     saveMeta();
     renderChecklist();
   }
+  LIVE_COUNTS = {};
+  LAST_DISCOVERY_CTX = ctx;
+  getOrCreateSession(ctx);
+  saveData();
+
   const placeLabel = ctx.state || 'any place';
   const nameLabel = [ctx.givenName, ctx.surname].filter(Boolean).join(' ');
   results.innerHTML = `
     <div class="discovery-summary">Searching <strong>${esc(nameLabel)}</strong> in <strong>${esc(placeLabel)}</strong>${ctx.variants ? ' · variants: ' + esc(normalizeVariants(ctx.variants).join(', ')) : ''}</div>
+    <div id="sessionSummary"></div>
     <div class="result-section">
-      <div class="result-section-title">Live search (U.S. Freedmen's Bureau / Smithsonian)</div>
-      <div class="result-grid" id="liveSmithsonian"></div>
+      <div class="result-section-title">Live results</div>
+      <div class="live-summary" id="liveSummary"></div>
+      <div class="result-grid" id="liveResults">
+        <div class="live-source" id="liveLoc"></div>
+        <div class="live-source" id="liveIa"></div>
+        <div class="live-source" id="liveSmithsonian"></div>
+      </div>
     </div>
     <div id="quickLinks"></div>
     <div id="strategyArea"></div>
   `;
 
   renderQuickLinks(document.getElementById('quickLinks'), ctx);
+  renderSessionSummary();
   if(ctx.enslaver){
     document.getElementById('strategyArea').innerHTML = strategyCard(ctx.enslaver, ctx.county, ctx.state);
   }
+  // keyless sources first, so an unconfigured user still sees real hits
+  searchLOC(document.getElementById('liveLoc'), ctx);
+  searchInternetArchive(document.getElementById('liveIa'), ctx);
   searchSmithsonian(document.getElementById('liveSmithsonian'), ctx);
 }
 

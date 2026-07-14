@@ -9,7 +9,8 @@ Forebear is an ancestry discovery companion built for the specific challenges of
 - **Family Tree** — add ancestors, link parents/children and spouses (with a note for the record that ties the couple, e.g. a cohabitation bond), and see the tree laid out by generation. Each person can carry an optional "associated enslaver surname" for pre-1870 research and a list of name variants — surnames were often chosen, changed, or respelled at emancipation, so every spelling seen in a record is worth keeping. Cards also surface the next Research Plan step for that person.
 - **Research Log** — track every source you check (citation, findings, status, next steps), linked to the person it's about. Each entry can be tagged with the facts it's evidence for (name, birth, parentage, …); confirmed sources surface those facts as chips on the person's tree card.
 - **Backups & portability** — one-click JSON backup export/import (merge or replace) and GEDCOM 5.5.1 export, so the tree is portable to Ancestry, FamilySearch, Gramps, and other genealogy tools. The app nudges you when a backup is more than 30 days stale. Export/import also doubles as a manual sync stopgap between browsers.
-- **Discovery** — search runs in the app itself. Connect a free Smithsonian Open Access key and it queries their catalog live. Every search also builds prefilled deep links — grouped by topic — into U.S. census and slave schedules, Freedmen's Bureau and Bank, USCT/pensions, Freedom on the Move, Last Seen ads, WPA narratives, state archives across the South, plus Caribbean, Canadian, UK, African/Atlantic (Slave Voyages), and Latin American collections. Given names and name variants are searched too: variants spawn extra prefilled links for key collections. The registry lives in `js/sources.js` — adding a collection is a data entry, not new code.
+- **Discovery** — search runs in the app itself, against **three live sources**: historical newspapers (Library of Congress Chronicling America — keyless), local histories and city directories (Internet Archive — keyless, each result opens with your surname pre-searched inside the book), and the Smithsonian's collections (free key). A summary bar shows per-source hit counts as results stream in. Every search also builds prefilled deep links — grouped by topic, distant groups collapsed — into U.S. census and slave schedules, Freedmen's Bureau and Bank, USCT/pensions, Freedom on the Move, Last Seen ads, WPA narratives, state archives across the South, plus Caribbean, Canadian, UK, African/Atlantic (Slave Voyages), and Latin American collections. Name variants appear as "also try" chips on key collection cards. The registry lives in `js/sources.js` — adding a collection is a data entry, not new code.
+- **Search sessions** — Forebear remembers every search (per surname + place). Opening a collection marks it; two buttons resolve it — "Found something" (opens a prefilled log entry) or "Nothing there" (writes a dated dead-end entry automatically, including the variants searched). A coverage bar shows *"7 of 31 collections resolved — 2 found · 4 dead ends · 1 opened, unresolved"*, so nobody ever re-searches a dead end. Sessions save, back up, and sync like everything else.
 - **Research Plan** — the Field Guide's method as steps attached to a chosen ancestor: anchor in the 1870 census, pin county and Freedmen's Bureau field office, work that place's record checklist, test enslaver candidates, confirm with a named source, then **Bridge toward Africa** (DNA workspace, ethnonyms, voyage matcher, African Origins, confidence levels). Progress persists per person so the app can answer "what's my next step?"
 - **Field Guide** — a short orientation to Freedmen's Bureau records, Freedman's Bank registers, cohabitation records, WPA slave narratives, and tracing through an enslaver's surname.
 - **Family sync (optional)** — share one tree across devices or relatives via a family code + passphrase. Off by default; the app stays fully usable without it.
@@ -62,10 +63,12 @@ The client (`js/sync.js`) and endpoint (`api/sync.js`) speak a simple GET/PUT co
 
 ## Connecting live search
 
-The Discovery tab queries the Smithsonian Open Access API directly from the browser:
+The Discovery tab queries three APIs directly from the browser:
 
-| Source | Key | How to get one |
+| Source | Key | Notes |
 |---|---|---|
+| LOC Chronicling America (newspapers) | none needed | keyless + CORS-open, verified July 2026 |
+| Internet Archive (local histories) | none needed | keyless + CORS-open, verified July 2026 |
 | Smithsonian Open Access | free, instant | [api.data.gov/signup](https://api.data.gov/signup/) |
 
 The key is entered in-app (Discovery → "Connect data sources") and stored via the same `storage` shim, so it lives in `localStorage` alongside everything else. It is never sent anywhere except directly to the Smithsonian's own API.
@@ -74,7 +77,7 @@ The key is entered in-app (Discovery → "Connect data sources") and stored via 
 
 ## Testing
 
-`npm test` runs `test/smoke.js` — a Node harness that loads the real app modules against a stubbed DOM/localStorage and exercises schema migration, spouse mirroring, GEDCOM structure, import merge/replace, the source registry's URL building, Smithsonian response parsing (against a captured fixture in `test/fixtures/`), XSS escaping, sync merge semantics, and the onboarding flows (sample family, checklist, collapsible form sections). Keep it green: when labels, schema versions, or registry entries change, update the expectations in the same commit.
+`npm test` runs `test/smoke.js` — a Node harness that loads the real app modules against a stubbed DOM/localStorage and exercises schema migration, spouse mirroring, GEDCOM structure, import merge/replace, the source registry's URL building, live-search parsing for all three sources (against captured fixtures in `test/fixtures/`), XSS escaping, sync merge semantics, search sessions (open/resolve/auto-logging/merge), and the onboarding flows (sample family, checklist, collapsible form sections). Keep it green: when labels, schema versions, or registry entries change, update the expectations in the same commit.
 
 ## Deploying
 

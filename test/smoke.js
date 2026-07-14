@@ -10,6 +10,8 @@ const src = fs.readFileSync(path.join(ROOT, 'js', 'sources.js'), 'utf8')
   + '\n;' + fs.readFileSync(path.join(ROOT, 'js/sync.js'), 'utf8')
   + '\n;' + fs.readFileSync(path.join(ROOT, 'js/sample.js'), 'utf8');
 const SI_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'si-search.json'), 'utf8');
+const LOC_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'loc-search.json'), 'utf8');
+const IA_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'ia-search.json'), 'utf8');
 
 // ---- stubs ----
 const store = new Map();
@@ -85,6 +87,11 @@ eval(src + `
   loadSampleFamily, removeSampleFamily, sampleLoaded, checklistSteps,
   maybeShowWelcome, dismissWelcome, setFormSection, toggleFormSection,
   personHasDnaData, personHasAfricaData,
+  sessionKey, getOrCreateSession, activeSession, markSourceOpened, resolveSource,
+  renderQuickLinks, renderSessionSummary, searchLOC, searchInternetArchive,
+  variantUrlsFor,
+  get QUICKLINK_CACHE(){ return QUICKLINK_CACHE },
+  setDiscoveryCtx(v){ LAST_DISCOVERY_CTX = v; },
   setKey(v){ API_KEYS.smithsonian = v; },
   setPendingImport(v){ pendingImport = v; },
 };`);
@@ -265,6 +272,77 @@ setTimeout(async () => {
   assert(s2.length === 5, 'checklist has 5 steps');
   assert(s2[0].done === true, 'first-person step done (seeded people)');
   assert(s2[4].done === true, 'backup step done (exported earlier in test)');
+
+  // ---- search sessions ----
+  const sctx = { surname:'Stowe', givenName:'Hattie', state:'North Carolina', county:'Gaston', city:'', enslaver:'', variants:'Stow, Stoe' };
+  assert(T.sessionKey(sctx) === 'stowe|north carolina|gaston', 'session key normalizes case');
+  const session = T.getOrCreateSession(sctx);
+  assert(T.STATE.sessions[session.key] === session, 'session stored in STATE');
+  assert(session.variants.join(',') === 'Stow,Stoe', 'session captured variants');
+  assert(T.getOrCreateSession(sctx) === session, 'same ctx reuses session');
+  T.setDiscoveryCtx(sctx);
+  // populate QUICKLINK_CACHE by rendering the quick links
+  const qlContainer = { innerHTML: '' };
+  T.renderQuickLinks(qlContainer, sctx);
+  assert(Object.keys(T.QUICKLINK_CACHE).length > 15, 'quick-link cache populated by render');
+  assert(qlContainer.innerHTML.includes('data-group-toggle'), 'groups render with toggles');
+  assert(qlContainer.innerHTML.includes('link-group collapsed'), 'later groups collapsed by default');
+  assert(qlContainer.innerHTML.includes('variant-chip'), 'variant chips render on key cards');
+  assert(!qlContainer.innerHTML.includes('Also try these spellings'), 'no separate variant card section');
+  // open → resolve "nothing" → auto dead-end log entry
+  const logCountBefore = T.STATE.logs.length;
+  T.markSourceOpened('census-1870');
+  assert(session.checks['census-1870'].status === 'opened', 'open recorded in session');
+  T.resolveSource('census-1870', 'nothing');
+  assert(session.checks['census-1870'].status === 'nothing', 'resolution recorded');
+  assert(T.STATE.logs.length === logCountBefore + 1, 'dead-end auto-logged');
+  const autoLog = T.STATE.logs[T.STATE.logs.length - 1];
+  assert(autoLog.status === 'dead-end' && autoLog.findings.includes('Stowe') && autoLog.findings.includes('Stow, Stoe'), 'auto log captures search terms + variants');
+  // open → resolve "found" → status recorded, no auto entry (log form opens instead)
+  T.markSourceOpened('freedmans-bank');
+  T.resolveSource('freedmans-bank', 'found');
+  assert(session.checks['freedmans-bank'].status === 'found', 'found recorded');
+  assert(T.STATE.logs.length === logCountBefore + 1, 'found does not auto-log (form opens)');
+  // resolved status cannot be downgraded by re-opening
+  T.markSourceOpened('census-1870');
+  assert(session.checks['census-1870'].status === 'nothing', 're-open does not downgrade a resolution');
+  // re-render shows the statuses
+  T.renderQuickLinks(qlContainer, sctx);
+  assert(qlContainer.innerHTML.includes('checked-nothing'), 'dead-end styling applied');
+  assert(qlContainer.innerHTML.includes('checked-found'), 'found styling applied');
+  T.renderSessionSummary();
+  const summaryEl = document.getElementById('sessionSummary');
+  assert(summaryEl.innerHTML.includes('2 of'), 'coverage bar counts resolved collections');
+  // sessions survive merge (newest wins)
+  const otherPayload = JSON.parse(JSON.stringify(T.currentPayload()));
+  otherPayload.sessions[session.key].checks['usct-soldiers'] = { status:'found', at: Date.now() };
+  otherPayload.sessions[session.key].updatedAt = Date.now() + 5000;
+  const mergedS = T.mergeStates(T.currentPayload(), otherPayload);
+  assert(mergedS.sessions[session.key].checks['usct-soldiers'], 'newer session wins in merge');
+
+  // ---- live search: LOC newspapers (fixture) ----
+  const locEl = { innerHTML: '' };
+  global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(LOC_FIXTURE)) });
+  await T.searchLOC(locEl, sctx);
+  assert(locEl.innerHTML.includes('Chronicling America'), 'LOC results render with source tag');
+  assert(locEl.innerHTML.includes('loc.gov'), 'LOC result links to loc.gov');
+  assert(document.getElementById('liveSummary').innerHTML.includes('Newspapers'), 'live summary chip for newspapers');
+  assert(document.getElementById('liveSummary').innerHTML.includes('22590'), 'live summary shows total hit count');
+
+  // ---- live search: Internet Archive (fixture) ----
+  const iaEl = { innerHTML: '' };
+  global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(IA_FIXTURE)) });
+  await T.searchInternetArchive(iaEl, sctx);
+  assert(iaEl.innerHTML.includes('Internet Archive'), 'IA results render with source tag');
+  assert(iaEl.innerHTML.includes('archive.org/details/'), 'IA result links to details page');
+  assert(iaEl.innerHTML.includes('q=Stowe'), 'IA link pre-searches the surname inside the text');
+  await T.searchInternetArchive(iaEl, { surname:'Stowe', state:'', county:'', city:'', enslaver:'', variants:'' });
+  assert(iaEl.innerHTML.includes('Add a state or county'), 'IA without a place shows guidance instead of noise');
+
+  // ---- variant chips helper ----
+  const vurls = T.variantUrlsFor('census-1870', sctx);
+  assert(vurls.length === 2, 'variantUrlsFor returns both variants');
+  assert(vurls[0].url.includes('q.surname=Stow'), 'variant url swaps surname');
 
   console.log(process.exitCode ? '\nSMOKE TEST FAILED' : '\nALL SMOKE TESTS PASSED');
 }, 50);

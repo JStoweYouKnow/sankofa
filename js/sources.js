@@ -1005,3 +1005,18 @@ function buildVariantLinks(ctx){
 function planChecklistLinks(ctx){
   return buildQuickLinks(ctx).filter(l => l.planChecklist);
 }
+
+// Per-variant URLs for one collection — used for the "also try" chips
+// on key collection cards instead of spawning whole extra cards.
+function variantUrlsFor(sourceId, ctx){
+  const variants = normalizeVariants(ctx.variants)
+    .filter(v => v.toLowerCase() !== String(ctx.surname || '').toLowerCase())
+    .slice(0, 4);
+  if(!variants.length) return [];
+  const src = SOURCE_REGISTRY.find(s => s.id === sourceId);
+  if(!src || typeof src.url !== 'function') return [];
+  return variants.map(v => ({
+    variant: v,
+    url: src.url(Object.assign({}, ctx, { surname: v, variants: [] }))
+  }));
+}

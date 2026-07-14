@@ -1,0 +1,41 @@
+{
+ "pagination": {
+  "of": 22590
+ },
+ "results": [
+  {
+   "title": "Image 2 of The times-news (Hendersonville, N.C.), May 29, 1934",
+   "url": "https://www.loc.gov/resource/sn86063811/1934-05-29/ed-1/?sp=2&q=freeman+gaston",
+   "date": "1934-05-29",
+   "location": [
+    "united states",
+    "henderson",
+    "north carolina",
+    "hendersonville"
+   ]
+  },
+  {
+   "title": "Image 6 of French Broad hustler (Hendersonville, N.C.), February 28, 1918",
+   "url": "https://www.loc.gov/resource/sn91068161/1918-02-28/ed-1/?sp=6&q=freeman+gaston",
+   "date": "1918-02-28",
+   "location": [
+    "henderson county",
+    "hendersonville",
+    "united states",
+    "henderson",
+    "north carolina"
+   ]
+  },
+  {
+   "title": "Image 7 of Arkansas State press (Little Rock, Ark.), May 15, 1959",
+   "url": "https://www.loc.gov/resource/sn84025840/1959-05-15/ed-1/?sp=7&q=freeman+gaston",
+   "date": "1959-05-15",
+   "location": [
+    "united states",
+    "little rock",
+    "pulaski",
+    "arkansas"
+   ]
+  }
+ ]
+}
