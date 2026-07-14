@@ -12,6 +12,12 @@
     "henderson",
     "north carolina",
     "hendersonville"
+   ],
+   "image_url": [
+    "https://tile.loc.gov/image-services/iiif/service:ndnp:ncu:batch_ncu_endive_ver02:data:sn86063811:00279558546:1934052901:0290/full/pct:3.125/0/default.jpg#h=298&w=209",
+    "https://tile.loc.gov/image-services/iiif/service:ndnp:ncu:batch_ncu_endive_ver02:data:sn86063811:00279558546:1934052901:0290/full/pct:6.25/0/default.jpg#h=596&w=418",
+    "https://tile.loc.gov/image-services/iiif/service:ndnp:ncu:batch_ncu_endive_ver02:data:sn86063811:00279558546:1934052901:0290/full/pct:12.5/0/default.jpg#h=1193&w=837",
+    "https://tile.loc.gov/text-services/word-coordinates-service?segment=/service/ndnp/ncu/batch_ncu_endive_ver02/data/sn86063811/00279558546/1934052901/0290.xml&format=alto_xml"
    ]
   },
   {
@@ -24,6 +30,11 @@
     "united states",
     "henderson",
     "north carolina"
+   ],
+   "image_url": [
+    "https://tile.loc.gov/image-services/iiif/service:ndnp:ncu:batch_ncu_fisher_ver01:data:sn91068161:00296024168:1918022801:0088/full/pct:3.125/0/default.jpg#h=300&w=212",
+    "https://tile.loc.gov/image-services/iiif/service:ndnp:ncu:batch_ncu_fisher_ver01:data:sn91068161:00296024168:1918022801:0088/full/pct:6.25/0/default.jpg#h=601&w=425",
+    "https://tile.loc.gov/text-services/word-coordinates-service?segment=/service/ndnp/ncu/batch_ncu_fisher_ver01/data/sn91068161/00296024168/1918022801/0088.xml&format=alto_xml"
    ]
   },
   {
@@ -35,6 +46,11 @@
     "little rock",
     "pulaski",
     "arkansas"
+   ],
+   "image_url": [
+    "https://tile.loc.gov/image-services/iiif/service:ndnp:arhi:batch_arhi_blackhole_ver01:data:sn84025840:00513687758:1959051501:1246/full/pct:6.25/0/default.jpg#h=427&w=278",
+    "https://tile.loc.gov/image-services/iiif/service:ndnp:arhi:batch_arhi_blackhole_ver01:data:sn84025840:00513687758:1959051501:1246/full/pct:12.5/0/default.jpg#h=855&w=557",
+    "https://tile.loc.gov/text-services/word-coordinates-service?segment=/service/ndnp/arhi/batch_arhi_blackhole_ver01/data/sn84025840/00513687758/1959051501/1246.xml&format=alto_xml"
    ]
   }
  ]

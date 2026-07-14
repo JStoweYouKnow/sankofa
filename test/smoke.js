@@ -89,7 +89,7 @@ eval(src + `
   personHasDnaData, personHasAfricaData,
   sessionKey, getOrCreateSession, activeSession, markSourceOpened, resolveSource,
   renderQuickLinks, renderSessionSummary, searchLOC, searchInternetArchive,
-  variantUrlsFor,
+  variantUrlsFor, openPreview, locPreviewFromResult,
   get QUICKLINK_CACHE(){ return QUICKLINK_CACHE },
   setDiscoveryCtx(v){ LAST_DISCOVERY_CTX = v; },
   setKey(v){ API_KEYS.smithsonian = v; },
@@ -343,6 +343,41 @@ setTimeout(async () => {
   const vurls = T.variantUrlsFor('census-1870', sctx);
   assert(vurls.length === 2, 'variantUrlsFor returns both variants');
   assert(vurls[0].url.includes('q.surname=Stow'), 'variant url swaps surname');
+
+  // ---- record preview: LOC IIIF ----
+  const locRow = JSON.parse(LOC_FIXTURE).results[0];
+  const locPrev = T.locPreviewFromResult(locRow);
+  assert(locPrev && locPrev.kind === 'image' && locPrev.sizes.length === 3, 'LOC preview derives 3 IIIF sizes');
+  assert(locPrev.sizes[1].includes('/full/pct:25/0/default.jpg'), 'LOC medium zoom is pct:25');
+  assert(locPrev.sizes[0].startsWith('https://tile.loc.gov/'), 'LOC preview stays on tile.loc.gov (CORS-open)');
+  assert(!locPrev.sizes[2].includes('#'), 'size fragment stripped');
+  // rendered cards carry a Preview button
+  global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(LOC_FIXTURE)) });
+  const locEl2 = { innerHTML: '' };
+  await T.searchLOC(locEl2, sctx);
+  assert(locEl2.innerHTML.includes('data-preview-idx'), 'LOC cards get Preview buttons');
+  const locIdx = T.RESULT_CACHE.findIndex(c=>c.preview && c.source === 'Chronicling America');
+  T.openPreview(locIdx);
+  const pBody = document.getElementById('previewBody');
+  assert(pBody.innerHTML.includes('tile.loc.gov') && pBody.innerHTML.includes('pct:25'), 'preview modal renders medium IIIF image');
+  assert(document.getElementById('previewZoom').innerHTML.includes('data-zoom="2"'), 'zoom controls render');
+  assert(document.getElementById('previewOpenLink').href === T.RESULT_CACHE[locIdx].url, 'escape hatch links to the original');
+
+  // ---- record preview: Internet Archive embed ----
+  global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(IA_FIXTURE)) });
+  const iaEl2 = { innerHTML: '' };
+  await T.searchInternetArchive(iaEl2, sctx);
+  const iaIdx = T.RESULT_CACHE.findIndex(c=>c.preview && c.preview.kind === 'iframe');
+  assert(iaIdx >= 0, 'IA cards carry iframe previews');
+  T.openPreview(iaIdx);
+  assert(pBody.innerHTML.includes('https://archive.org/embed/'), 'preview modal embeds BookReader');
+  assert(document.getElementById('previewZoom').innerHTML === '', 'no zoom controls for iframe previews');
+
+  // ---- record preview: Smithsonian without media has no preview ----
+  global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(SI_FIXTURE)) });
+  const siEl = { innerHTML: '' };
+  await T.searchSmithsonian(siEl, sctx);
+  assert(!siEl.innerHTML.includes('data-preview-idx'), 'SI records without online_media get no Preview button');
 
   console.log(process.exitCode ? '\nSMOKE TEST FAILED' : '\nALL SMOKE TESTS PASSED');
 }, 50);

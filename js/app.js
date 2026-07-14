@@ -1198,16 +1198,99 @@ function resultCard(c){
       <div class="result-url">${esc(c.url)}</div>
     </div>
     <div class="result-actions">
-      <a class="btn btn-small" href="${esc(c.url)}" target="_blank" rel="noopener">Open</a>
+      ${c.preview?`<button class="btn btn-small" data-preview-idx="${idx}">Preview</button>`:''}
+      <a class="btn ${c.preview?'btn-ghost ':''}btn-small" href="${esc(c.url)}" target="_blank" rel="noopener">Open</a>
       <button class="btn btn-ghost btn-small" data-log-idx="${idx}">+ Log</button>
     </div>
   </div>`;
 }
+
+// ================= RECORD PREVIEW =================
+// Views a record inside the app instead of a new tab. Only possible
+// where the archive permits it (verified July 2026): LOC newspaper
+// page images (IIIF on tile.loc.gov, CORS *), Internet Archive's
+// official embeddable BookReader, and Smithsonian media when a record
+// carries one. Everything else stays an external link by necessity.
+let PREVIEW_IDX = -1;
+let PREVIEW_ZOOM = 0;
+
+// LOC search results carry IIIF thumbnails; derive the size ladder
+// from one of them: .../full/pct:6.25/0/default.jpg -> S/M/L.
+function locPreviewFromResult(r){
+  const urls = (Array.isArray(r.image_url) ? r.image_url : []).map(u=>String(u).split('#')[0]);
+  if(!urls.length) return null;
+  // the list mixes IIIF images with text/word-coordinate services —
+  // take the last actual IIIF image
+  const iiif = urls.filter(u=>/\/full\/pct:[\d.]+\/0\/default\.jpg$/.test(u));
+  const clean = iiif.length ? iiif[iiif.length-1] : urls[0];
+  const m = clean.match(/^(.*)\/full\/pct:[\d.]+\/0\/default\.jpg$/);
+  if(!m) return /\.(jpe?g|png|gif)$/i.test(clean) ? { kind: 'image', sizes: [clean], initial: 0 } : null;
+  return {
+    kind: 'image',
+    sizes: [
+      m[1] + '/full/pct:12.5/0/default.jpg',
+      m[1] + '/full/pct:25/0/default.jpg',
+      m[1] + '/full/pct:50/0/default.jpg'
+    ],
+    initial: 1
+  };
+}
+
+function openPreview(idx){
+  const c = RESULT_CACHE[idx];
+  if(!c || !c.preview) return;
+  PREVIEW_IDX = idx;
+  const p = c.preview;
+  document.getElementById('previewTitle').textContent = c.label;
+  document.getElementById('previewMeta').textContent = [c.source, c.note].filter(Boolean).join(' — ');
+  document.getElementById('previewOpenLink').href = c.url;
+  const body = document.getElementById('previewBody');
+  const zoom = document.getElementById('previewZoom');
+  if(p.kind === 'iframe'){
+    zoom.innerHTML = '';
+    body.innerHTML = `<iframe class="preview-frame" src="${esc(p.src)}" loading="lazy" allowfullscreen title="Record preview"></iframe>`;
+  }else{
+    PREVIEW_ZOOM = Math.min(p.initial || 0, p.sizes.length - 1);
+    renderPreviewImage(p);
+  }
+  document.getElementById('previewOverlay').classList.add('open');
+}
+function renderPreviewImage(p){
+  const body = document.getElementById('previewBody');
+  const natural = PREVIEW_ZOOM === p.sizes.length - 1 && p.sizes.length > 1;
+  body.innerHTML = `<div class="preview-scroll">
+    <img class="preview-img ${natural ? 'natural' : ''}" src="${esc(p.sizes[PREVIEW_ZOOM])}" alt="Record page preview">
+  </div>`;
+  const zoom = document.getElementById('previewZoom');
+  const labels = ['Small', 'Medium', 'Large'];
+  zoom.innerHTML = p.sizes.length > 1
+    ? 'Zoom: ' + p.sizes.map((_, i)=>
+        `<button type="button" class="btn btn-ghost btn-small ${i===PREVIEW_ZOOM ? 'zoom-active' : ''}" data-zoom="${i}">${labels[i] || (i+1)}</button>`
+      ).join('')
+    : '';
+}
+document.getElementById('previewOverlay').addEventListener('click', e=>{
+  const z = e.target.closest('[data-zoom]');
+  if(!z) return;
+  PREVIEW_ZOOM = Number(z.dataset.zoom);
+  const c = RESULT_CACHE[PREVIEW_IDX];
+  if(c && c.preview && c.preview.kind !== 'iframe') renderPreviewImage(c.preview);
+});
+document.getElementById('previewLogBtn').addEventListener('click', ()=>{
+  const c = RESULT_CACHE[PREVIEW_IDX];
+  closeOverlay('previewOverlay');
+  if(c) queueLogFromResult(c);
+});
 document.getElementById('toolkitResults').addEventListener('click', e=>{
   const logBtn = e.target.closest('[data-log-idx]');
   if(logBtn){
     const c = RESULT_CACHE[Number(logBtn.dataset.logIdx)];
     if(c) queueLogFromResult(c);
+    return;
+  }
+  const previewBtn = e.target.closest('[data-preview-idx]');
+  if(previewBtn){
+    openPreview(Number(previewBtn.dataset.previewIdx));
     return;
   }
   const resolveBtn = e.target.closest('[data-resolve]');
@@ -1419,7 +1502,10 @@ async function searchSmithsonian(container, ctx){
       const unit = r.unitCode || '';
       const link = dnr.record_link || (dnr.guid ? `https://www.si.edu/object/${dnr.guid}` : '#');
       const note = [unit ? ('Unit: '+unit) : '', extractFreetext(r)].filter(Boolean).join(' — ');
-      return resultCard({label: title, note, url: link, type: "Freedmen's Bureau Record", source: 'Smithsonian'});
+      const media = (dnr.online_media && dnr.online_media.media) || [];
+      const img = media.length ? String(media[0].thumbnail || media[0].content || '') : '';
+      const preview = /^https?:\/\//.test(img) ? { kind: 'image', sizes: [img], initial: 0 } : null;
+      return resultCard({label: title, note, url: link, type: "Freedmen's Bureau Record", source: 'Smithsonian', preview});
     }).join('');
   }catch(e){
     updateLiveSummary('Smithsonian', 'error', 'err');
@@ -1460,7 +1546,8 @@ async function searchLOC(container, ctx){
         note: [year, loc].filter(Boolean).join(' — '),
         url: link,
         type: 'Newspaper / Advertisement',
-        source: 'Chronicling America'
+        source: 'Chronicling America',
+        preview: locPreviewFromResult(r)
       });
     }).join('');
   }catch(e){
@@ -1513,7 +1600,8 @@ async function searchInternetArchive(container, ctx){
       note: [d.year ? ('Published ' + d.year) : '', 'opens with "' + ctx.surname + '" pre-searched inside the text'].filter(Boolean).join(' — '),
       url: 'https://archive.org/details/' + encodeURIComponent(d.identifier) + '?q=' + encodeURIComponent(ctx.surname),
       type: 'Other',
-      source: 'Internet Archive'
+      source: 'Internet Archive',
+      preview: { kind: 'iframe', src: 'https://archive.org/embed/' + encodeURIComponent(d.identifier) }
     })).join('');
   }catch(e){
     updateLiveSummary('Internet Archive', 'error', 'err');

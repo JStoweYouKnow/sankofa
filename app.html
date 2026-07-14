@@ -526,6 +526,23 @@
   </div>
 </div>
 
+<!-- ===== RECORD PREVIEW MODAL ===== -->
+<div class="overlay" id="previewOverlay">
+  <div class="modal preview-modal">
+    <button class="close-x" onclick="closeOverlay('previewOverlay')">✕</button>
+    <div class="modal-title" id="previewTitle"></div>
+    <div class="modal-sub" id="previewMeta"></div>
+    <div id="previewBody"></div>
+    <div class="preview-actions">
+      <div id="previewZoom" class="preview-zoom"></div>
+      <div class="modal-actions-right">
+        <a class="btn btn-ghost" id="previewOpenLink" href="#" target="_blank" rel="noopener">Open original ↗</a>
+        <button type="button" class="btn" id="previewLogBtn">+ Log this record</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== WELCOME MODAL ===== -->
 <div class="overlay" id="welcomeOverlay">
   <div class="modal welcome-modal">
