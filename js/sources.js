@@ -1006,6 +1006,41 @@ function planChecklistLinks(ctx){
   return buildQuickLinks(ctx).filter(l => l.planChecklist);
 }
 
+// ---------------------------------------------------------------
+// Birthplace parsing: turn free-text like "Belmont, Gaston County, NC"
+// into the Discovery form's {state, county, city}, so searching for a
+// person never means re-typing what the tree already knows.
+// ---------------------------------------------------------------
+const US_STATE_ABBR = {
+  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',
+  DE:'Delaware',DC:'District of Columbia',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',
+  IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',
+  MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',
+  NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',
+  OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',
+  TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',
+  WI:'Wisconsin',WY:'Wyoming'
+};
+const PLACE_LOOKUP = new Map(US_STATES.map(p=>[p.toLowerCase(), p]));
+
+function parsePlace(text){
+  const out = { state:'', county:'', city:'' };
+  if(!text) return out;
+  const parts = String(text).split(',').map(s=>s.trim()).filter(Boolean);
+  const leftovers = [];
+  parts.forEach(part=>{
+    const abbr = US_STATE_ABBR[part.replace(/\./g,'').toUpperCase()];
+    if(abbr && !out.state){ out.state = abbr; return; }
+    const full = PLACE_LOOKUP.get(part.toLowerCase());
+    if(full && !out.state){ out.state = full; return; }
+    const cm = part.match(/^(.*?)\s+(county|parish)$/i);
+    if(cm && !out.county){ out.county = cm[1]; return; }
+    leftovers.push(part);
+  });
+  if(leftovers.length) out.city = leftovers[0];
+  return out;
+}
+
 // Per-variant URLs for one collection — used for the "also try" chips
 // on key collection cards instead of spawning whole extra cards.
 function variantUrlsFor(sourceId, ctx){

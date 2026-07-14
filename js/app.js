@@ -468,6 +468,7 @@ function renderAll(){
   if(typeof renderPlanView === 'function') renderPlanView();
   if(typeof renderSampleBanner === 'function') renderSampleBanner();
   renderChecklist();
+  updateDiscoveryBadge();
 }
 
 // ================= ONBOARDING =================
@@ -538,15 +539,45 @@ function dismissChecklist(){
   renderChecklist();
 }
 
-// Placeholder shown in Discovery before the first search.
+// Discovery landing before the first search of this visit: recent
+// sessions with their coverage, so research resumes in one click —
+// or a hint when there's no history yet.
 function renderDiscoveryPlaceholder(){
   const tk = document.getElementById('toolkitResults');
-  if(tk && !tk.innerHTML.trim()){
+  if(!tk || tk.innerHTML.trim()) return;
+  const sessions = Object.values(STATE.sessions)
+    .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))
+    .slice(0, 5);
+  if(!sessions.length){
     tk.innerHTML = `<div class="empty">
       <div class="empty-title">Search a surname to begin</div>
       <p>Try the family surname plus a state — e.g. "Freeman" in North Carolina. You'll get live Smithsonian results plus prefilled links into the right archives. The links need no account or key.</p>
     </div>`;
+    return;
   }
+  tk.innerHTML = `<div class="result-section">
+    <div class="result-section-title">Pick up where you left off</div>
+    <div class="result-grid">` + sessions.map(s=>{
+      const c = sessionCounts(s);
+      const person = s.personId ? STATE.people.find(p=>p.id===s.personId) : null;
+      const place = [s.county, s.state].filter(Boolean).join(', ') || 'any place';
+      const bits = [];
+      if(c.found) bits.push(c.found + ' found');
+      if(c.nothing) bits.push(c.nothing + ' dead end' + (c.nothing>1?'s':''));
+      if(c.opened) bits.push(c.opened + ' opened, unresolved');
+      const progress = bits.length ? bits.join(' · ') : 'no collections checked yet';
+      return `<div class="result-card session-card ${c.opened?'has-pending':''}">
+        <div class="result-left">
+          <div class="result-label">${esc(s.surname)}${s.givenName?' ('+esc(s.givenName)+')':''} — ${esc(place)}</div>
+          <div class="result-note">${person?'For '+esc(person.name)+' · ':''}${esc(progress)} · last ${esc(new Date(s.updatedAt).toLocaleDateString())}</div>
+        </div>
+        <div class="result-actions">
+          <button type="button" class="btn btn-small" data-resume-key="${esc(s.key)}">Resume</button>
+        </div>
+      </div>`;
+    }).join('') + `</div>
+    <div class="field-hint" style="margin-top:10px;">Or start a new search above — Forebear remembers every one.</div>
+  </div>`;
 }
 
 // ================= FAMILY TREE =================
@@ -1293,6 +1324,11 @@ document.getElementById('toolkitResults').addEventListener('click', e=>{
     openPreview(Number(previewBtn.dataset.previewIdx));
     return;
   }
+  const resumeBtn = e.target.closest('[data-resume-key]');
+  if(resumeBtn){
+    resumeSession(resumeBtn.dataset.resumeKey);
+    return;
+  }
   const resolveBtn = e.target.closest('[data-resolve]');
   if(resolveBtn){
     resolveSource(resolveBtn.dataset.srcId, resolveBtn.dataset.resolve);
@@ -1323,7 +1359,7 @@ let QUICKLINK_CACHE = {};
 function sessionKey(ctx){
   return [String(ctx.surname||'').toLowerCase(), String(ctx.state||'').toLowerCase(), String(ctx.county||'').toLowerCase()].join('|');
 }
-function getOrCreateSession(ctx){
+function getOrCreateSession(ctx, personId){
   const key = sessionKey(ctx);
   if(!STATE.sessions[key]){
     STATE.sessions[key] = {
@@ -1331,6 +1367,7 @@ function getOrCreateSession(ctx){
       surname: ctx.surname, givenName: ctx.givenName || '',
       state: ctx.state || '', county: ctx.county || '',
       variants: normalizeVariants(ctx.variants),
+      personId: personId || '',
       createdAt: Date.now(), updatedAt: Date.now(),
       checks: {}
     };
@@ -1338,11 +1375,18 @@ function getOrCreateSession(ctx){
   }else{
     const s = STATE.sessions[key];
     if(ctx.givenName) s.givenName = ctx.givenName;
+    if(personId) s.personId = personId;
     const vars = normalizeVariants(ctx.variants);
     if(vars.length) s.variants = vars;
   }
   ACTIVE_SESSION_KEY = key;
   return STATE.sessions[key];
+}
+// The person a log entry should attach to: the session's person if
+// the search was run for someone, else whoever's plan is open.
+function sessionPersonId(){
+  const s = activeSession();
+  return (s && s.personId) || (typeof activePlanPersonId !== 'undefined' && activePlanPersonId) || '';
 }
 function activeSession(){
   return STATE.sessions[ACTIVE_SESSION_KEY] || null;
@@ -1363,7 +1407,7 @@ function markSourceOpened(sourceId){
   s.updatedAt = Date.now();
   saveData();
   // re-render after the new tab has been launched
-  setTimeout(()=>{ renderQuickLinksForActive(); renderSessionSummary(); }, 60);
+  setTimeout(()=>{ renderQuickLinksForActive(); renderSessionSummary(); updateDiscoveryBadge(); }, 60);
 }
 function resolveSource(sourceId, status){
   const s = activeSession();
@@ -1376,7 +1420,7 @@ function resolveSource(sourceId, status){
     STATE.logs.push({
       id: uid(),
       date: todayStr(),
-      personId: (typeof activePlanPersonId !== 'undefined' && activePlanPersonId) || '',
+      personId: sessionPersonId(),
       type: card.type || 'Other',
       status: 'dead-end',
       sourceName: card.label,
@@ -1399,7 +1443,7 @@ function resolveSource(sourceId, status){
       sourceName: card.label,
       citation: card.url,
       type: card.type,
-      personId: (typeof activePlanPersonId !== 'undefined' && activePlanPersonId) || ''
+      personId: sessionPersonId()
     });
   }
 }
@@ -1407,14 +1451,45 @@ function renderQuickLinksForActive(){
   const container = document.getElementById('quickLinks');
   if(container && LAST_DISCOVERY_CTX) renderQuickLinks(container, LAST_DISCOVERY_CTX);
 }
-function sessionStatusHtml(sourceId){
-  const s = activeSession();
-  const check = s && s.checks[sourceId];
+function checkChipHtml(check){
   if(!check) return '';
   const when = new Date(check.at).toLocaleDateString();
   if(check.status === 'found') return `<span class="check-chip check-found">✓ found · ${esc(when)}</span>`;
   if(check.status === 'nothing') return `<span class="check-chip check-nothing">dead end · ${esc(when)}</span>`;
   return `<span class="check-chip check-opened">opened · ${esc(when)}</span>`;
+}
+function sessionStatusHtml(sourceId){
+  const s = activeSession();
+  return checkChipHtml(s && s.checks[sourceId]);
+}
+function sessionCounts(s){
+  const checks = Object.values((s && s.checks) || {});
+  const count = st => checks.filter(c=>c.status===st).length;
+  return { found: count('found'), nothing: count('nothing'), opened: count('opened') };
+}
+function resumeSession(key){
+  const s = STATE.sessions[key];
+  if(!s) return;
+  fillDiscoveryForm({
+    givenName: s.givenName || '',
+    surname: s.surname || '',
+    variants: s.variants || [],
+    state: s.state || '',
+    county: s.county || '',
+    city: '',
+    enslaver: ''
+  });
+  switchView('toolkit');
+  runDiscovery(s.personId || undefined);
+}
+function updateDiscoveryBadge(){
+  const el = document.getElementById('discoveryBadge');
+  if(!el) return;
+  const count = Object.values(STATE.sessions).reduce((n,s)=>
+    n + Object.values(s.checks||{}).filter(c=>c.status==='opened').length, 0);
+  el.hidden = count === 0;
+  el.textContent = count;
+  el.title = count + ' opened collection' + (count===1?'':'s') + ' awaiting a found / nothing-there resolution';
 }
 function renderSessionSummary(){
   const el = document.getElementById('sessionSummary');
@@ -1674,7 +1749,7 @@ function renderQuickLinks(container, ctx){
 }
 
 // ---------- run everything ----------
-function runDiscovery(){
+function runDiscovery(forPersonId){
   const ctx = discoveryContextFromForm();
   const results = document.getElementById('toolkitResults');
 
@@ -1691,7 +1766,7 @@ function runDiscovery(){
   }
   LIVE_COUNTS = {};
   LAST_DISCOVERY_CTX = ctx;
-  getOrCreateSession(ctx);
+  getOrCreateSession(ctx, typeof forPersonId === 'string' ? forPersonId : '');
   saveData();
 
   const placeLabel = ctx.state || 'any place';
@@ -1736,7 +1811,7 @@ function queueLogFromResult(c){
     citation: c.url,
     type: c.type || "Freedmen's Bureau Record",
     findings: '',
-    personId: (typeof activePlanPersonId !== 'undefined' && activePlanPersonId) || ''
+    personId: sessionPersonId()
   });
 }
 

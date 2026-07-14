@@ -478,6 +478,17 @@
     font-size:12.5px;color:var(--ink-faint);
   }
 
+  /* discovery nav badge: opened-but-unresolved collections */
+  .nav-badge{
+    margin-left:auto;
+    font-family:'Courier Prime',monospace;
+    font-size:10px;
+    background:rgba(212,148,58,0.2);color:var(--brass);
+    border-radius:9px;padding:1px 7px;
+  }
+  /* recent-search resume cards */
+  .session-card.has-pending{border-left:3px solid var(--brass);}
+
   /* record preview modal */
   .preview-modal{max-width:920px;width:100%;}
   #previewBody{margin-top:14px;}

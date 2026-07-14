@@ -90,6 +90,9 @@ eval(src + `
   sessionKey, getOrCreateSession, activeSession, markSourceOpened, resolveSource,
   renderQuickLinks, renderSessionSummary, searchLOC, searchInternetArchive,
   variantUrlsFor, openPreview, locPreviewFromResult,
+  parsePlace, personSearchCtx, discoverPerson, resumeSession,
+  renderDiscoveryPlaceholder, updateDiscoveryBadge, sessionCounts, sessionPersonId,
+  selectPlanPerson, renderPlanView,
   get QUICKLINK_CACHE(){ return QUICKLINK_CACHE },
   setDiscoveryCtx(v){ LAST_DISCOVERY_CTX = v; },
   setKey(v){ API_KEYS.smithsonian = v; },
@@ -378,6 +381,63 @@ setTimeout(async () => {
   const siEl = { innerHTML: '' };
   await T.searchSmithsonian(siEl, sctx);
   assert(!siEl.innerHTML.includes('data-preview-idx'), 'SI records without online_media get no Preview button');
+
+  // ---- birthplace parsing ----
+  const pp1 = T.parsePlace('Belmont, Gaston County, NC');
+  assert(pp1.state === 'North Carolina' && pp1.county === 'Gaston' && pp1.city === 'Belmont', 'parses city, county, state abbreviation');
+  const pp2 = T.parsePlace('Charlotte, N.C.');
+  assert(pp2.state === 'North Carolina' && pp2.city === 'Charlotte' && pp2.county === '', 'parses dotted abbreviation');
+  const pp3 = T.parsePlace('St. Catherine Parish, Jamaica');
+  assert(pp3.state === 'Jamaica' && pp3.county === 'St. Catherine', 'parses Caribbean parish + island');
+  assert(T.parsePlace('').state === '', 'empty birthplace parses to empty');
+  assert(T.parsePlace('Gaston County, North Carolina').state === 'North Carolina', 'parses full state name');
+
+  // ---- person-linked search ----
+  T.STATE.people.push({ id:'pT', name:'Hattie Stowe', birthplace:'Belmont, Gaston County, NC',
+    nameVariants:['Stow'], parentIds:[], spouses:[], enslaverSurname:'Rhyne', updatedAt: Date.now() });
+  const pT = T.STATE.people.find(p=>p.id==='pT');
+  const pctx = T.personSearchCtx(pT, null);
+  assert(pctx.surname === 'Stowe' && pctx.givenName === 'Hattie', 'person ctx splits name');
+  assert(pctx.state === 'North Carolina' && pctx.county === 'Gaston' && pctx.city === 'Belmont', 'person ctx parses birthplace when no plan');
+  assert(pctx.variants.join(',') === 'Stow' && pctx.enslaver === 'Rhyne', 'person ctx carries variants + enslaver');
+  global.fetch = () => Promise.reject(new Error('offline in test'));
+  T.discoverPerson('pT');
+  assert(T.activeSession() && T.activeSession().key === 'stowe|north carolina|gaston', 'discoverPerson reuses the matching session');
+  assert(T.activeSession().personId === 'pT', 'session linked to the person');
+  assert(document.getElementById('tkSurname').value === 'Stowe', 'discovery form prefilled from person');
+  assert(T.sessionPersonId() === 'pT', 'log linking prefers the session person');
+  T.resolveSource('wpa-narratives', 'nothing');
+  const lastLog = T.STATE.logs[T.STATE.logs.length - 1];
+  assert(lastLog.personId === 'pT', 'auto dead-end log attaches to the session person');
+
+  // ---- resume panel ----
+  const tk = document.getElementById('toolkitResults');
+  tk.innerHTML = '';
+  T.renderDiscoveryPlaceholder();
+  assert(tk.innerHTML.includes('Pick up where you left off'), 'landing shows recent searches');
+  assert(tk.innerHTML.includes('data-resume-key'), 'recent searches have Resume buttons');
+  assert(tk.innerHTML.includes('For Hattie Stowe'), 'session card names its person');
+  assert(tk.innerHTML.includes('dead end'), 'session card shows coverage counts');
+  document.getElementById('tkSurname').value = '';
+  T.resumeSession('stowe|north carolina|gaston');
+  assert(document.getElementById('tkSurname').value === 'Stowe', 'resume refills the form');
+  assert(T.activeSession().key === 'stowe|north carolina|gaston', 'resume reactivates the session');
+
+  // ---- plan records step reflects the session ----
+  T.selectPlanPerson('pT');
+  const planContent = document.getElementById('planContent');
+  assert(planContent.innerHTML.includes('check-found'), 'plan checklist shows found status from Discovery session');
+  assert(planContent.innerHTML.includes('Synced from Discovery'), 'session-resolved rows are locked as synced');
+  assert(planContent.innerHTML.includes('Run Discovery for Stowe'), 'plan offers one-click person search');
+
+  // ---- discovery nav badge ----
+  T.markSourceOpened('nmaahc-fb-portal');
+  T.updateDiscoveryBadge();
+  const badge = document.getElementById('discoveryBadge');
+  assert(badge.hidden === false && Number(badge.textContent) >= 1, 'nav badge counts opened-unresolved collections');
+  T.resolveSource('nmaahc-fb-portal', 'nothing');
+  T.updateDiscoveryBadge();
+  assert(Number(badge.textContent) === 0 || badge.hidden === true, 'badge clears when resolved');
 
   console.log(process.exitCode ? '\nSMOKE TEST FAILED' : '\nALL SMOKE TESTS PASSED');
 }, 50);

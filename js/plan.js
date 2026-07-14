@@ -246,20 +246,30 @@ function planStepActions(key, person, plan){
   if(key === 'records'){
     const st = plan.steps.records;
     const sources = typeof planChecklistLinks === 'function' ? planChecklistLinks(ctx) : buildQuickLinks(ctx).filter(s=>s.planChecklist);
+    // Reflect this ancestor's Discovery session: anything opened or
+    // resolved there shows here too — one checklist, not two.
+    const sess = STATE.sessions[sessionKey(personSearchCtx(person, plan))] || null;
     const hint = !plan.state
       ? `<div class="field-hint" style="margin-bottom:10px;">Set a place above to unlock state-, island-, and country-specific collections. National and Atlantic sources stay listed either way.</div>`
-      : `<div class="field-hint" style="margin-bottom:10px;">Checklist for ${esc(plan.state)}${plan.county ? ', ' + esc(plan.county) : ''} — open each, log what you find (or don't).</div>`;
+      : `<div class="field-hint" style="margin-bottom:10px;">Checklist for ${esc(plan.state)}${plan.county ? ', ' + esc(plan.county) : ''} — statuses sync automatically from Discovery searches run for this ancestor.</div>`;
+    const runBtn = `<div class="plan-actions">
+      <button type="button" class="btn btn-small" onclick="discoverPerson('${esc(person.id)}')">Run Discovery for ${esc(planSurname(person) || 'this ancestor')}</button>
+    </div>`;
     const rows = sources.map(src=>{
-      const checked = !!st.checked[src.id];
-      return `<div class="plan-src-row ${checked?'searched':''}">
-        <label><input type="checkbox" ${checked?'checked':''} onchange="setPlanChecked('${esc(src.id)}', this.checked)"> <span>${esc(src.label)}</span></label>
+      const check = sess && sess.checks[src.id];
+      const resolved = !!(check && check.status !== 'opened');
+      const manual = !!st.checked[src.id];
+      const searched = manual || resolved;
+      const statusChip = check ? ' ' + checkChipHtml(check) : '';
+      return `<div class="plan-src-row ${searched?'searched':''}">
+        <label><input type="checkbox" ${searched?'checked':''} ${resolved?'disabled title="Synced from Discovery"':''} onchange="setPlanChecked('${esc(src.id)}', this.checked)"> <span>${esc(src.label)}</span>${statusChip}</label>
         <div class="plan-src-actions">
           <a class="btn btn-small" href="${esc(src.url)}" target="_blank" rel="noopener">Open</a>
           ${planLogBtn({ personId: person.id, type: src.type, sourceName: src.label, citation: src.url }, '+ Log')}
         </div>
       </div>`;
     }).join('');
-    return `${hint}<div class="plan-src-list">${rows || '<div class="field-hint">No checklist items for this place yet — try FamilySearch all-collections from Discovery.</div>'}</div>`;
+    return `${hint}${runBtn}<div class="plan-src-list">${rows || '<div class="field-hint">No checklist items for this place yet — try FamilySearch all-collections from Discovery.</div>'}</div>`;
   }
   if(key === 'enslaver'){
     const hasEnslaverHint = person.enslaverSurname
@@ -605,23 +615,32 @@ function runPlanDiscovery(candidateName){
 }
 // Called from a tree-card "Discover" button — pre-fills Discovery from
 // whatever we know about this person and runs the search.
+// The one place a person becomes a search context: name split, tree
+// variants, and place from the plan if set — else parsed out of the
+// birthplace text ("Belmont, Gaston County, NC" → NC / Gaston / Belmont).
+// Used by discoverPerson AND the plan's records checklist, so both
+// resolve to the same session key.
+function personSearchCtx(person, plan){
+  const parsed = typeof parsePlace === 'function' ? parsePlace(person.birthplace) : { state:'', county:'', city:'' };
+  return {
+    givenName: planGiven(person),
+    surname: planSurname(person),
+    variants: person.nameVariants || [],
+    state: (plan && plan.state) || parsed.state || '',
+    county: (plan && plan.county) || parsed.county || '',
+    city: parsed.city || '',
+    enslaver: person.enslaverSurname || ''
+  };
+}
+
 function discoverPerson(personId, ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
   const person = STATE.people.find(p=>p.id===personId);
   if(!person) return;
   activePlanPersonId = personId; // ensures +Log from Discovery pre-fills this person
-  const plan = STATE.plans[personId];
-  fillDiscoveryForm({
-    givenName: planGiven(person),
-    surname: planSurname(person),
-    variants: person.nameVariants || [],
-    state: (plan && plan.state) || '',
-    county: (plan && plan.county) || '',
-    city: '',
-    enslaver: person.enslaverSurname || ''
-  });
+  fillDiscoveryForm(personSearchCtx(person, STATE.plans[personId]));
   switchView('toolkit');
-  runDiscovery();
+  runDiscovery(personId);
 }
 
 // Jump to Discovery with the family surname + this candidate as the
