@@ -93,6 +93,7 @@ eval(src + `
   parsePlace, personSearchCtx, discoverPerson, resumeSession,
   renderDiscoveryPlaceholder, updateDiscoveryBadge, sessionCounts, sessionPersonId,
   selectPlanPerson, renderPlanView,
+  earliestEra, runDiscovery, addSurnameAsCandidate,
   get QUICKLINK_CACHE(){ return QUICKLINK_CACHE },
   setDiscoveryCtx(v){ LAST_DISCOVERY_CTX = v; },
   setKey(v){ API_KEYS.smithsonian = v; },
@@ -438,6 +439,37 @@ setTimeout(async () => {
   T.resolveSource('nmaahc-fb-portal', 'nothing');
   T.updateDiscoveryBadge();
   assert(Number(badge.textContent) === 0 || badge.hidden === true, 'badge clears when resolved');
+
+  // ---- earliest mentions: era bounding ----
+  const era1 = T.earliestEra({ birthYear: 'c. 1832' });
+  assert(era1.start === 1832 && era1.end === 1877, 'era from birth year to Reconstruction');
+  const era2 = T.earliestEra({ birthYear: '1890' });
+  assert(era2.start === 1890 && era2.end === 1920, 'era extends past 1877 for later births');
+  const era3 = T.earliestEra(null);
+  assert(era3.start === 1789 && era3.end === 1877, 'default era without a person');
+
+  // ---- earliest mentions: era params reach the archives ----
+  let capturedUrl = '';
+  global.fetch = (u)=>{ capturedUrl = String(u); return Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(LOC_FIXTURE)) }); };
+  await T.searchLOC({ innerHTML: '' }, Object.assign({}, sctx, { era: { start: 1832, end: 1877 } }));
+  assert(capturedUrl.includes('dates=1832/1877') && capturedUrl.includes('sort=date'), 'LOC gets date range + oldest-first sort');
+  global.fetch = (u)=>{ capturedUrl = String(u); return Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(IA_FIXTURE)) }); };
+  await T.searchInternetArchive({ innerHTML: '' }, Object.assign({}, sctx, { era: { start: 1832, end: 1877 } }));
+  assert(decodeURIComponent(capturedUrl).includes('year:[1832 TO 1877]'), 'IA gets year range');
+  assert(capturedUrl.includes('sort[]=year+asc'), 'IA sorts year ascending');
+
+  // ---- earliest mentions: end-to-end + candidate hookup ----
+  global.fetch = () => Promise.reject(new Error('offline in test'));
+  T.resumeSession('stowe|north carolina|gaston'); // refill form, session person = pT
+  T.runDiscovery('', 'earliest');
+  const tkHtml = document.getElementById('toolkitResults').innerHTML;
+  assert(tkHtml.includes('Earliest dated mentions'), 'earliest mode renders explainer + section');
+  assert(tkHtml.includes('enslaver candidate'), 'explainer offers the candidate hookup for a person-linked session');
+  const candBefore = (T.STATE.plans['pT'] && T.STATE.plans['pT'].candidates.length) || 0;
+  T.addSurnameAsCandidate();
+  assert(T.STATE.plans['pT'].candidates.some(c=>c.name === 'Stowe'), 'surname added as enslaver candidate on the plan');
+  T.addSurnameAsCandidate();
+  assert(T.STATE.plans['pT'].candidates.filter(c=>c.name==='Stowe').length === 1, 'candidate add is deduped');
 
   console.log(process.exitCode ? '\nSMOKE TEST FAILED' : '\nALL SMOKE TESTS PASSED');
 }, 50);

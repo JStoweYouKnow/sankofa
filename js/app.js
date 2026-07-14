@@ -1588,6 +1588,24 @@ async function searchSmithsonian(container, ctx){
   }
 }
 
+// ---------- "earliest mentions" era bounding ----------
+// A date window for oldest-first searches: from the person's birth
+// year (or 1789, the earliest LOC newspaper coverage) to the end of
+// Reconstruction — extended for people born later, so the window
+// always covers their plausible record trail.
+function birthYearOf(person){
+  if(!person || !person.birthYear) return 0;
+  const m = String(person.birthYear).match(/\d{3,4}/);
+  return m ? Number(m[0]) : 0;
+}
+function earliestEra(person){
+  const birth = birthYearOf(person);
+  return {
+    start: birth || 1789,
+    end: Math.max(1877, birth ? birth + 30 : 0)
+  };
+}
+
 // ---------- live search: Chronicling America (LOC) ----------
 // Keyless and CORS-open (verified July 2026). Historical newspapers:
 // runaway ads, "Last Seen" family-search ads, obituaries.
@@ -1597,6 +1615,7 @@ async function searchLOC(container, ctx){
   const name = [ctx.givenName, ctx.surname].filter(Boolean).join(' ') || ctx.surname;
   let url = 'https://www.loc.gov/collections/chronicling-america/?q=' + encodeURIComponent(name) + '&fo=json&c=6';
   if(ctx.state && isUs(ctx)) url += '&fa=' + encodeURIComponent('location:' + ctx.state.toLowerCase());
+  if(ctx.era) url += '&dates=' + ctx.era.start + '/' + ctx.era.end + '&sort=date';
   try{
     const ctrl = new AbortController();
     const timer = setTimeout(()=>ctrl.abort(), 15000);
@@ -1652,9 +1671,11 @@ async function searchInternetArchive(container, ctx){
   }
   updateLiveSummary('Internet Archive', 'searching…', 'muted');
   container.innerHTML = loadingCard('Searching Internet Archive local histories…');
-  const q = placeTerm + ' AND mediatype:texts';
+  const q = placeTerm + ' AND mediatype:texts'
+    + (ctx.era ? ' AND year:[' + ctx.era.start + ' TO ' + ctx.era.end + ']' : '');
   const url = 'https://archive.org/advancedsearch.php?q=' + encodeURIComponent(q)
-    + '&fl[]=identifier&fl[]=title&fl[]=year&rows=6&page=1&output=json';
+    + '&fl[]=identifier&fl[]=title&fl[]=year&rows=6&page=1&output=json'
+    + (ctx.era ? '&sort[]=year+asc' : '');
   try{
     const ctrl = new AbortController();
     const timer = setTimeout(()=>ctrl.abort(), 15000);
@@ -1749,7 +1770,40 @@ function renderQuickLinks(container, ctx){
 }
 
 // ---------- run everything ----------
-function runDiscovery(forPersonId){
+function runEarliestDiscovery(){
+  runDiscovery('', 'earliest');
+}
+// The searched surname doubling as an enslaver-candidate surname is
+// the Field Guide §6 hypothesis — one click files it on the person's
+// plan worksheet.
+function addSurnameAsCandidate(){
+  const s = activeSession();
+  if(!s || !s.personId) return;
+  const person = STATE.people.find(p=>p.id===s.personId);
+  if(!person || typeof ensurePlan !== 'function') return;
+  const plan = ensurePlan(s.personId);
+  if(plan.candidates.some(c=>String(c.name).toLowerCase() === s.surname.toLowerCase())){
+    showToast('Already a candidate');
+    return;
+  }
+  plan.candidates.push({ name: s.surname, status: 'untested' });
+  plan.updatedAt = Date.now();
+  saveData();
+  if(typeof renderPlanView === 'function') renderPlanView();
+  showToast('Added to ' + person.name + "'s enslaver candidates");
+}
+function earliestExplainer(ctx, session){
+  const hasPerson = !!(session && session.personId && STATE.people.find(p=>p.id===session.personId));
+  return `<div class="strategy-card" style="margin-bottom:16px;">
+    <div class="result-label">Earliest dated mentions of "${esc(ctx.surname)}", ${ctx.era.start}–${ctx.era.end}</div>
+    <div class="result-note">Results are sorted oldest-first. Mentions from before emancipation usually name the white family that held the surname — that's a lead, not a dead end: it's how you find enslaver candidates whose estate papers, tax lists, and slave-schedule entries may name your ancestors (Field Guide §6).</div>
+    ${hasPerson ? `<div class="plan-actions" style="margin-top:10px;">
+      <button type="button" class="btn btn-small" onclick="addSurnameAsCandidate()">+ Add "${esc(ctx.surname)}" as an enslaver candidate</button>
+    </div>` : ''}
+  </div>`;
+}
+
+function runDiscovery(forPersonId, mode){
   const ctx = discoveryContextFromForm();
   const results = document.getElementById('toolkitResults');
 
@@ -1766,16 +1820,22 @@ function runDiscovery(forPersonId){
   }
   LIVE_COUNTS = {};
   LAST_DISCOVERY_CTX = ctx;
-  getOrCreateSession(ctx, typeof forPersonId === 'string' ? forPersonId : '');
+  const session = getOrCreateSession(ctx, typeof forPersonId === 'string' ? forPersonId : '');
   saveData();
+  // era-bounded, oldest-first mode; the window narrows to the session
+  // person's plausible record trail when the search is theirs
+  ctx.era = mode === 'earliest'
+    ? earliestEra(STATE.people.find(p=>p.id===session.personId))
+    : null;
 
   const placeLabel = ctx.state || 'any place';
   const nameLabel = [ctx.givenName, ctx.surname].filter(Boolean).join(' ');
   results.innerHTML = `
-    <div class="discovery-summary">Searching <strong>${esc(nameLabel)}</strong> in <strong>${esc(placeLabel)}</strong>${ctx.variants ? ' · variants: ' + esc(normalizeVariants(ctx.variants).join(', ')) : ''}</div>
+    <div class="discovery-summary">Searching <strong>${esc(nameLabel)}</strong> in <strong>${esc(placeLabel)}</strong>${ctx.variants ? ' · variants: ' + esc(normalizeVariants(ctx.variants).join(', ')) : ''}${ctx.era ? ' · <strong>earliest mentions ' + ctx.era.start + '–' + ctx.era.end + '</strong>' : ''}</div>
     <div id="sessionSummary"></div>
+    ${ctx.era ? earliestExplainer(ctx, session) : ''}
     <div class="result-section">
-      <div class="result-section-title">Live results</div>
+      <div class="result-section-title">${ctx.era ? 'Earliest dated mentions' : 'Live results'}</div>
       <div class="live-summary" id="liveSummary"></div>
       <div class="result-grid" id="liveResults">
         <div class="live-source" id="liveLoc"></div>
