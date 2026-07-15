@@ -58,4 +58,8 @@ No FamilySearch credentials are ever read or stored.
 
 Node smoke tests load `extension/parsers/familysearch.js` against `test/fixtures/familysearch-results.html`.
 
+## Next parser (decided)
+
+**NARA Catalog web UI** (`catalog.archives.gov`) is the next login-walled capture target — not Ancestry. Reasons: Discovery already deep-links NARA; the Catalog API is unusable (July 2026); Bureau / USCT / schedule work often lands there. Host permissions stay FamilySearch-only until a fixture-backed parser ships (same review-before-import pattern as FS).
+
 See also the main [README](../README.md) Discovery agent ladder section.

@@ -10,12 +10,12 @@ The research method stays **rule-based and citation-honest**: a shared surname i
 
 - **Family Tree** — add ancestors, link parents/children and spouses (with a note for the record that ties the couple, e.g. a cohabitation bond), and see the tree laid out by generation. Each person can carry an optional "associated enslaver surname" for pre-1870 research and a list of name variants — surnames were often chosen, changed, or respelled at emancipation, so every spelling seen in a record is worth keeping. Cards also surface the next Research Plan step for that person.
 - **Research Log** — track every source you check (citation, findings, status, next steps), linked to the person it's about. Each entry can be tagged with the facts it's evidence for (name, birth, parentage, …); confirmed sources surface those facts as chips on the person's tree card.
-- **Backups & portability** — one-click JSON backup export/import (merge or replace), GEDCOM 5.5.1 export, and **GEDCOM import** (INDI/FAM → people with new ids, parents/spouses, empty plans + case files). The app nudges you when a backup is more than 30 days stale.
+- **Backups & portability** — one-click JSON backup export/import (merge or replace), GEDCOM 5.5.1 export, and **GEDCOM import** (INDI/FAM → people; unique **name + birth year** matches fill empty fields, otherwise new ids with parents/spouses and empty plans + case files). The app nudges you when a backup is more than 30 days stale.
 - **Case file** — every brick-wall person gets open questions, hypotheses (lead / hypothesis / confirmed / ruled out), notes, and a short agent timeline on the Research Plan.
 - **Enslaver graph** — candidates are first-class entities reusable across relatives; Plan step 4 ranks them from the tree, sessions, and Discovery hits.
 - **Discovery** — search runs in the app itself, against **three live sources**: historical newspapers (Library of Congress Chronicling America — keyless), local histories and city directories (Internet Archive — keyless, each result opens with your surname pre-searched inside the book), and the Smithsonian's collections (free key). A summary bar shows per-source hit counts as results stream in. Every search also builds prefilled deep links — grouped by topic, distant groups collapsed — into U.S. census and slave schedules, Freedmen's Bureau and Bank, USCT/pensions, Freedom on the Move, Last Seen ads, WPA narratives, state archives across the South, plus Caribbean, Canadian, UK, African/Atlantic (Slave Voyages), and Latin American collections. Name variants appear as "also try" chips on key collection cards. The registry lives in `js/sources.js` — adding a collection is a data entry, not new code.
 - **Hit reading & page text** — live hits get a rule-based lens (enslaver lead, Bureau, runaway ad, …). **Add page text** (paste OCR/transcript) or Smithsonian freetext sharpens belonging-to / servant clues; readings are labeled **excerpt-based · OCR may err**.
-- **Agent runner** — on the coach banner, **Run next 3** queues checklist / live / companion steps, pauses for review (Found / Nothing / Skip / Add enslaver lead), and updates sessions, the case timeline, and enslaver leads. Never auto-confirms proof.
+- **Agent runner** — on the coach banner, **Run next 3** queues **live LOC / Internet Archive / Smithsonian** searches first (when not already resolved), then checklist / companion steps; pauses for review (Found / Nothing / Skip / Add enslaver lead); updates sessions, the case timeline, and enslaver leads. Never auto-confirms proof.
 - **Browser companion (optional)** — sideload the Chrome MV3 extension in `extension/` to capture FamilySearch search-result links from tabs you already opened while signed in. Review before import. See [extension/README.md](extension/README.md).
 - **Trust labels** — shared lead / hypothesis / confirmed / ruled-out chips on coach, hits, agent review, case hypotheses, candidates, and Bridge synthesis. AI enhance cannot upgrade a claim to confirmed.
 - **DNA & Bridge to Africa** — import a simple match CSV (`name`, `company`, `ethnicity notes`) into the DNA workspace; Bridge synthesis proposes DNA questions early, but ethnonym “agent” apply stays gated until a confirming paper trail **and** a case foothold (enslaver lead or Discovery coverage) exist. Never auto-sets region confidence to documentary.
@@ -123,9 +123,9 @@ Enhance never changes coach action kinds or trust class (lead stays lead).
 | A | Per-person case file on the Research Plan |
 | B | Enslaver graph + cross-tree ranking |
 | C | Browser companion (FamilySearch capture) |
-| D | Agent runner (“Run next 3” + review queue) |
+| D | Agent runner (“Run next 3” + live LOC/IA/SI + review queue) |
 | E | Page-text / excerpt interpret hooks |
-| F | GEDCOM import |
+| F | GEDCOM import (name+year merge) |
 | G | Shared trust badges |
 | H | DNA match CSV + case-gated Africa ethnonym agent |
 
@@ -158,8 +158,7 @@ It's a static site, so any static host works:
 ## Roadmap ideas
 
 - Keep expanding `SOURCE_REGISTRY` (more Caribbean island archives, Brazilian notarial indexes, 1867 voter rolls by state) — each is one data entry.
-- Smart GEDCOM merge by name+year (import currently always creates new ids).
-- Second login-walled companion path after FamilySearch (chosen from U7 learnings).
+- **Next companion parser: NARA Catalog web UI** (`catalog.archives.gov`) — chosen over Ancestry after FamilySearch learnings: already deep-linked in Discovery, Catalog API is dead (July 2026), and Bureau / USCT / schedule records sit there behind intermittent login. Do not expand extension host permissions until a fixture parser exists.
 - Stronger sync auth (per-user accounts) if shared trees grow beyond a trusted family code.
 
 ## License

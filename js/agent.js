@@ -13,12 +13,49 @@ var AGENT = {
   running: false
 };
 
-const AGENT_LIVE_IDS = {
-  'chronicling-america': 'loc'
-};
+// Live Discovery fetchers the agent can run in-app (not deep links).
+// Checklist id `chronicling-america` maps to LOC; IA/SI use dedicated live ids.
+const AGENT_LIVE_SOURCES = [
+  {
+    liveKey: 'loc',
+    sourceId: 'chronicling-america',
+    label: 'Chronicling America (live)',
+    note: 'In-app newspaper search (LOC)'
+  },
+  {
+    liveKey: 'ia',
+    sourceId: 'live-internet-archive',
+    label: 'Internet Archive (live)',
+    note: 'In-app local histories / directories (needs a place)'
+  },
+  {
+    liveKey: 'si',
+    sourceId: 'live-smithsonian',
+    label: 'Smithsonian Open Access (live)',
+    note: 'In-app SI search (free api.data.gov key under Connect)',
+    needsKey: 'smithsonian'
+  }
+];
+
+const AGENT_LIVE_IDS = (function(){
+  const map = {};
+  AGENT_LIVE_SOURCES.forEach(s => { map[s.sourceId] = s.liveKey; });
+  return map;
+})();
 
 function agentIsFamilySearchUrl(url){
   return /familysearch\.org/i.test(String(url || ''));
+}
+
+function agentLiveSessionDone(session, sourceId){
+  const check = session && session.checks && session.checks[sourceId];
+  return !!(check && (check.status === 'found' || check.status === 'nothing'));
+}
+
+function agentLiveContainer(liveKey){
+  const ids = { loc: 'liveLoc', ia: 'liveIa', si: 'liveSi' };
+  const el = typeof document !== 'undefined' && document.getElementById(ids[liveKey] || '');
+  return el || { innerHTML: '' };
 }
 
 function agentStepKindForSource(src){
@@ -104,7 +141,27 @@ function agentNextSources(personId, n){
     }
   }
 
-  // 2) Checklist gaps in coach priority order
+  // 2) Unsearched live Discovery sources (LOC / IA / SI) — high priority so
+  // checklist deep-links do not crowd out the in-app fetchers.
+  AGENT_LIVE_SOURCES.forEach(live => {
+    if(out.length >= n) return;
+    if(seen.has(live.sourceId)) return;
+    if(agentLiveSessionDone(session, live.sourceId)) return;
+    seen.add(live.sourceId);
+    out.push({
+      id: live.sourceId,
+      sourceId: live.sourceId,
+      kind: 'live',
+      label: live.label,
+      url: '',
+      status: 'queued',
+      note: live.note || 'In-app live search',
+      liveKey: live.liveKey,
+      needsKey: live.needsKey || ''
+    });
+  });
+
+  // 3) Checklist gaps in coach priority order
   let sources = [];
   if(typeof planChecklistLinks === 'function'){
     sources = planChecklistLinks(ctx).slice();
@@ -143,27 +200,6 @@ function agentNextSources(personId, n){
       status: 'queued',
       note: src.note || '',
       liveKey: AGENT_LIVE_IDS[src.id] || ''
-    });
-  }
-
-  // 3) If still short, offer live LOC/IA/SI once
-  if(out.length < n){
-    ['loc', 'ia', 'si'].forEach(liveKey => {
-      if(out.length >= n) return;
-      const id = 'live:' + liveKey;
-      if(seen.has(id)) return;
-      seen.add(id);
-      const labels = { loc: 'Chronicling America (live)', ia: 'Internet Archive (live)', si: 'Smithsonian (live)' };
-      out.push({
-        id: id,
-        sourceId: liveKey === 'loc' ? 'chronicling-america' : id,
-        kind: 'live',
-        label: labels[liveKey],
-        url: '',
-        status: 'queued',
-        note: 'In-app live search',
-        liveKey: liveKey
-      });
     });
   }
 
@@ -278,24 +314,35 @@ async function agentRunStep(step, packed){
   }
   if(step.kind === 'live'){
     step.status = 'running';
-    const fake = { innerHTML: '' };
+    const liveKey = step.liveKey
+      || AGENT_LIVE_IDS[step.sourceId]
+      || (step.sourceId === 'chronicling-america' ? 'loc' : '');
+    // Ensure Discovery panels exist so results land where the researcher can see them
+    if(typeof runDiscovery === 'function' && !document.getElementById('liveLoc')){
+      try{ runDiscovery(AGENT.personId || (packed && packed.person && packed.person.id)); }catch(_){}
+    }
+    const container = agentLiveContainer(liveKey);
     try{
-      if(step.liveKey === 'loc' && typeof searchLOC === 'function'){
-        await searchLOC(fake, ctx);
-      } else if(step.liveKey === 'ia' && typeof searchInternetArchive === 'function'){
-        await searchInternetArchive(fake, ctx);
-      } else if(step.liveKey === 'si' && typeof searchSmithsonian === 'function'){
-        await searchSmithsonian(fake, ctx);
-      } else if(step.sourceId === 'chronicling-america' && typeof searchLOC === 'function'){
-        await searchLOC(fake, ctx);
+      if(liveKey === 'si' && typeof API_KEYS !== 'undefined' && !API_KEYS.smithsonian){
+        step.status = 'needs-review';
+        step.note = (step.note ? step.note + ' · ' : '')
+          + 'Smithsonian key needed under Connect data sources — then re-run or open Discovery';
+        if(typeof searchSmithsonian === 'function') await searchSmithsonian(container, ctx);
+        if(step.sourceId && typeof markSourceOpened === 'function') markSourceOpened(step.sourceId);
+        return;
+      }
+      if(liveKey === 'loc' && typeof searchLOC === 'function'){
+        await searchLOC(container, ctx);
+      } else if(liveKey === 'ia' && typeof searchInternetArchive === 'function'){
+        await searchInternetArchive(container, ctx);
+      } else if(liveKey === 'si' && typeof searchSmithsonian === 'function'){
+        await searchSmithsonian(container, ctx);
       } else {
         step.status = 'error';
         step.error = 'No live search handler for this step';
         return;
       }
-      if(step.sourceId && step.sourceId.indexOf('live:') !== 0 && typeof markSourceOpened === 'function'){
-        markSourceOpened(step.sourceId);
-      }
+      if(step.sourceId && typeof markSourceOpened === 'function') markSourceOpened(step.sourceId);
       step.status = 'needs-review';
       step.note = (step.note ? step.note + ' · ' : '') + 'Live search finished — review Hit reading, then resolve';
     }catch(e){

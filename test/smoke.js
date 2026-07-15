@@ -114,9 +114,11 @@ eval(src + `
   findOrCreateEnslaver,
   companionValidateMessage, companionNormalizeHit, companionConfirmImport,
   agentNextSources, agentRunNext, agentResolveStep, agentEnsureSession, agentOnCompanionImport,
+  AGENT_LIVE_SOURCES, AGENT_LIVE_IDS, agentLiveSessionDone,
   markSourceOpened,
   interpretHit, normalizeExcerpt, setHitExcerpt, hydrateHitExcerpt, interpretHasExcerpt,
   gedcomToPeople, applyGedcomImport, parseGedcom, gedParseDisplayName,
+  planGedcomMerge, gedFindExistingMatch, gedNamesCompatible, gedYearsCompatible,
   trustBadge, trustNormalize, trustClampUpgrade, trustClampConfidence, trustFromLens,
   llmMergeCoachEnhance, agentQueueHtml,
   parseDnaMatchCsv, importDnaMatchesCsv, formatDnaMatchRows,
@@ -660,9 +662,20 @@ setTimeout(async () => {
   T.STATE.plans.pCase.steps.records.done = false;
   T.STATE.plans.pCase.state = 'North Carolina';
   T.STATE.plans.pCase.county = 'Gaston';
+  assert(T.AGENT_LIVE_IDS['chronicling-america'] === 'loc', 'LOC mapped in AGENT_LIVE_IDS');
+  assert(T.AGENT_LIVE_IDS['live-internet-archive'] === 'ia', 'IA mapped in AGENT_LIVE_IDS');
+  assert(T.AGENT_LIVE_IDS['live-smithsonian'] === 'si', 'SI mapped in AGENT_LIVE_IDS');
+  assert(Array.isArray(T.AGENT_LIVE_SOURCES) && T.AGENT_LIVE_SOURCES.length === 3, 'three live sources registered');
   const queued = agentNextSources('pCase', 3);
   assert(queued.length >= 1 && queued.length <= 3, 'agent queues up to N checklist/live steps');
   assert(queued.every(s => s.kind && s.label && s.status), 'queue steps have kind/label/status');
+  assert(queued.filter(s => s.kind === 'live').length >= 1, 'Run next N prioritizes at least one live step');
+  assert(queued.some(s => s.liveKey === 'loc' || s.liveKey === 'ia' || s.liveKey === 'si'),
+    'live steps carry loc/ia/si liveKey');
+  const liveWide = agentNextSources('pCase', 5);
+  const liveKeys = liveWide.filter(s => s.kind === 'live').map(s => s.liveKey);
+  assert(liveKeys.indexOf('loc') >= 0 && liveKeys.indexOf('ia') >= 0 && liveKeys.indexOf('si') >= 0,
+    'N=5 can queue all three live fetchers when unresolved');
   global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(LOC_FIXTURE)) });
   AGENT.personId = 'pCase';
   AGENT.steps = queued.map(s => Object.assign({}, s));
@@ -772,10 +785,13 @@ setTimeout(async () => {
   const chaney = parsedGed.people.find(p => p.name === 'Chaney Freeman');
   assert(chaney && (chaney.nameVariants || []).some(v => /Stowe/i.test(v)), 'second NAME → variant');
   assert(silas.spouses.some(s => s.personId === chaney.id), 'FAM HUSB/WIFE → spouses');
+  assert(T.gedNamesCompatible('Hattie Freeman', 'Hattie Freeman Leeper'), 'token subset names match');
+  assert(T.gedYearsCompatible('c. 1867', '1867'), 'approx years compatible');
+  assert(!T.gedYearsCompatible('1867', '1901'), 'distant years do not match');
   const beforePeople = T.STATE.people.length;
   T.PENDING_GEDCOM = parsedGed;
   const applied = T.applyGedcomImport();
-  assert(applied.added === 5, 'apply adds 5 people');
+  assert(applied.added === 5, 'fresh tree: apply adds 5 people');
   assert(T.STATE.people.length === beforePeople + 5, 'STATE grew by 5');
   const imported = T.STATE.people.filter(p => p.name === 'Hattie Freeman' && p.id !== 'pA');
   assert(imported.length >= 1, 'imported Hattie present with new id');
@@ -783,6 +799,20 @@ setTimeout(async () => {
   assert(T.STATE.plans[impId] && T.STATE.plans[impId].case, 'empty plan+case created');
   const coachImp = T.coachForPerson(impId);
   assert(coachImp && coachImp.primary && coachImp.primary.kind, 'coachForPerson works on imported person');
+  // Re-import same GEDCOM → merge by name+year, no duplicates
+  const reParsed = T.gedcomToPeople(GED_FIXTURE);
+  const planned = T.planGedcomMerge(reParsed.people, T.STATE.people);
+  assert(planned.merged.length === 5 && planned.toAdd.length === 0, 're-import plans 5 merges, 0 adds');
+  const target = T.STATE.people.find(p => p.name === 'Silas Freeman' && p.enslaverSurname === 'Rhyne');
+  assert(target, 'Silas present after first import');
+  const silasCountBefore = T.STATE.people.filter(p => p.name === 'Silas Freeman').length;
+  target.birthplace = '';
+  T.PENDING_GEDCOM = reParsed;
+  const reApplied = T.applyGedcomImport();
+  assert(reApplied.merged === 5 && reApplied.added === 0, 're-import merges 5, adds 0');
+  assert(T.STATE.people.filter(p => p.name === 'Silas Freeman').length === silasCountBefore,
+    're-import does not add another Silas');
+  assert(/Gaston/i.test(target.birthplace), 'merge fills empty birthplace');
   const bad = T.parseGedcom('0 HEAD\nnot a line\n0 TRLR');
   assert(bad.warnings >= 1, 'malformed line increments warning count');
   assert(document.getElementById('gedcomOverlay') && document.getElementById('gedcomFile'), 'gedcom UI elements exist');
