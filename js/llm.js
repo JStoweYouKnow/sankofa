@@ -9,6 +9,7 @@
 const LLM_SYSTEM = `You are a careful research assistant for Black American and diaspora genealogy past the 1870 brick wall.
 Never invent specific archival citations, page numbers, or claimed facts not present in the input.
 Prefer honest uncertainty. A shared surname is a lead, not proof of enslavement.
+Never mark a claim as confirmed or documentary — only the researcher can promote trust after logging a named source.
 Keep language plain, warm, and concise. US English.`;
 
 function llmConfigured(){
@@ -121,16 +122,19 @@ async function llmEnhanceCoach(personId){
     { role: 'user', content: JSON.stringify(payload) }
   ], { json: true, max_tokens: 350 });
   const out = llmParseJson(content);
-  if(out.headline) base.headline = String(out.headline).slice(0, 180);
-  if(out.why) base.why = String(out.why).slice(0, 400);
-  base._llm = true;
-  return base;
+  return llmMergeCoachEnhance(base, out);
 }
 
 async function llmApplyCoachEnhance(personId, btn){
   llmBusy(btn, true);
   try{
+    const before = coachForPerson(personId);
     const enhanced = await llmEnhanceCoach(personId);
+    // AE5: kind + trust must stay stable
+    if(enhanced.primary && before.primary && enhanced.primary.kind !== before.primary.kind){
+      enhanced.primary = before.primary;
+    }
+    enhanced.trust = before.trust;
     const banner = btn && btn.closest('.coach-banner');
     if(banner){
       const h = banner.querySelector('.coach-headline');
@@ -142,6 +146,9 @@ async function llmApplyCoachEnhance(personId, btn){
         label.textContent = label.textContent.replace('Coach', 'Coach · AI');
       }
       banner.classList.add('coach-ai');
+      banner.dataset.coachKind = (enhanced.primary && enhanced.primary.kind) || before.primary.kind;
+      banner.dataset.coachTrust = enhanced.trust || before.trust || 'lead';
+      // Do not rewrite trust badge from AI
     }
     showToast('Coach wording updated');
   }catch(e){
@@ -329,8 +336,8 @@ async function llmApplyHitEnhance(btn){
 }
 
 // Prefer LLM why in interpretHitHtml when present
-function interpretHitHtmlWithLlm(c, ctx){
-  const html = typeof interpretHitHtml === 'function' ? interpretHitHtml(c, ctx) : '';
+function interpretHitHtmlWithLlm(c, ctx, opts){
+  const html = typeof interpretHitHtml === 'function' ? interpretHitHtml(c, ctx, opts) : '';
   if(!c || !c._llmWhy || !html) return html;
   return html.replace(
     /(<span class="hit-why">)([\s\S]*?)(<\/span>)/,

@@ -16,23 +16,52 @@ const INTERPRET_LENSES = {
   'general': { badge: 'Possible match', cls: 'lens-general' }
 };
 
+const EXCERPT_MAX_CHARS = 8000;
+let EXCERPT_EDIT_IDX = -1;
+
+function normalizeExcerpt(raw){
+  const s = String(raw || '').replace(/\s+/g, ' ').trim();
+  if(!s) return { text: '', truncated: false };
+  if(s.length <= EXCERPT_MAX_CHARS) return { text: s, truncated: false };
+  return { text: s.slice(0, EXCERPT_MAX_CHARS), truncated: true };
+}
+
 function interpretExtractYear(c){
   if(c && c.year){
     const y = parseInt(String(c.year).replace(/\D/g, '').slice(0, 4), 10);
     if(y >= 1600 && y <= 2100) return y;
   }
-  const blob = [c && c.note, c && c.label].filter(Boolean).join(' ');
+  const blob = [c && c.note, c && c.label, c && c.excerpt].filter(Boolean).join(' ');
   const m = String(blob).match(/\b((?:1[7-9]|20)\d{2})\b/);
   return m ? Number(m[1]) : 0;
 }
 
 function interpretTextBlob(c){
-  return [c && c.label, c && c.note, c && c.source, c && c.type].filter(Boolean).join(' ').toLowerCase();
+  return [c && c.label, c && c.note, c && c.source, c && c.type, c && c.excerpt]
+    .filter(Boolean).join(' ').toLowerCase();
+}
+
+function interpretHasExcerpt(c){
+  return !!(c && String(c.excerpt || '').trim());
+}
+
+/** Signals from page/OCR/transcript excerpt (not title alone). */
+function interpretExcerptSignals(excerpt, surname){
+  const raw = String(excerpt || '');
+  const low = raw.toLowerCase();
+  const sur = String(surname || '').trim().toLowerCase();
+  const belonging = /\bbelonging to\b|\bowned by\b|\bproperty of\b|\bin the possession of\b/i.test(raw);
+  const servant = /\bservant(?:s)? of\b|\bhis servant\b|\bher servant\b|\bas a servant\b/i.test(raw);
+  const slaveryLang = /\bslave|enslaved|negro|mulatto|plantation|bondspeople|chattel\b/i.test(raw);
+  const surnameInExcerpt = !!(sur && sur.length >= 2 && low.indexOf(sur) >= 0);
+  const namedOwners = interpretExtractTitleSurnames(raw, surname);
+  return { belonging, servant, slaveryLang, surnameInExcerpt, namedOwners };
 }
 
 /**
  * Rule-based reading of one Discovery hit in search context.
- * @returns {{ lens: string, badge: string, cls: string, why: string, year: number, suggestCandidate: boolean, candidateName: string }}
+ * Optional c.excerpt (IA/LOC/SI text, paste, or companion page text) sharpens lenses.
+ * @returns {{ lens: string, badge: string, cls: string, why: string, year: number, suggestCandidate: boolean, candidateName: string, excerptBased: boolean, excerptTruncated: boolean }}
  */
 function interpretHit(c, ctx){
   const text = interpretTextBlob(c);
@@ -42,6 +71,10 @@ function interpretHit(c, ctx){
   const preEmancipation = year > 0 && year < 1865;
   const reconstruction = year >= 1865 && year <= 1877;
   const eraMode = !!(ctx && ctx.era);
+  const excerpt = String((c && c.excerpt) || '').trim();
+  const excerptBased = !!excerpt;
+  const excerptTruncated = !!(c && c.excerptTruncated);
+  const signals = excerptBased ? interpretExcerptSignals(excerpt, surname) : null;
 
   let lens = 'general';
   let why = 'Compare names, place, and dates to your ancestor before treating this as proof.';
@@ -94,7 +127,33 @@ function interpretHit(c, ctx){
     candidateName = surname;
   }
 
+  // Excerpt / OCR / transcript hooks (Phase E) — never claim OCR accuracy
+  if(signals && (signals.belonging || signals.servant || (signals.slaveryLang && signals.surnameInExcerpt))){
+    lens = 'enslaver-lead';
+    if(signals.namedOwners.length){
+      candidateName = signals.namedOwners[0];
+      suggestCandidate = true;
+      why = 'Page excerpt names someone “belonging to” / under an enslaver (“'
+        + candidateName + '”) — treat as a lead to test on the slave schedule, not proof. OCR may err; verify on the image.';
+    } else if(signals.surnameInExcerpt && surname){
+      suggestCandidate = true;
+      candidateName = surname;
+      why = 'Page excerpt uses enslavement language with the searched surname — a candidate lead, not a confirmed link. OCR may err; verify on the image.';
+    } else {
+      why = 'Page excerpt uses belonging-to / servant language — pull every named enslaver and place, then test on the 1860 slave schedule. OCR may err.';
+      if(surname){ suggestCandidate = true; candidateName = surname; }
+    }
+  } else if(excerptBased && signals && signals.namedOwners.length && (preEmancipation || eraMode || signals.slaveryLang)){
+    lens = 'enslaver-lead';
+    candidateName = signals.namedOwners[0];
+    suggestCandidate = true;
+    why = 'Excerpt names “' + candidateName + '” in a context worth testing as an enslaver lead. OCR may err; confirm against the page image.';
+  } else if(excerptBased){
+    why = why + ' Reading uses page excerpt (OCR/transcript may err) — verify names on the original.';
+  }
+
   const meta = INTERPRET_LENSES[lens] || INTERPRET_LENSES.general;
+  const trust = typeof trustFromLens === 'function' ? trustFromLens(lens) : 'lead';
   return {
     lens,
     badge: meta.badge,
@@ -102,21 +161,145 @@ function interpretHit(c, ctx){
     why,
     year,
     suggestCandidate,
-    candidateName: candidateName || (suggestCandidate ? surname : '')
+    candidateName: candidateName || (suggestCandidate ? surname : ''),
+    excerptBased,
+    excerptTruncated,
+    trust
   };
 }
 
-function interpretHitHtml(c, ctx){
+function interpretHitHtml(c, ctx, opts){
   if(typeof interpretHit !== 'function') return '';
   const i = interpretHit(c, ctx);
+  const idx = opts && typeof opts.idx === 'number' ? opts.idx : -1;
   const addBtn = (i.suggestCandidate && i.candidateName && typeof sessionPersonId === 'function' && sessionPersonId())
     ? `<button type="button" class="btn btn-ghost btn-small" data-add-cand="${esc(i.candidateName)}">+ Candidate “${esc(i.candidateName)}”</button>`
     : '';
+  const excerptChip = i.excerptBased
+    ? `<span class="hit-excerpt-chip">Excerpt-based · OCR may err${i.excerptTruncated ? ' · truncated' : ''}</span>`
+    : '';
+  const textBtn = idx >= 0
+    ? `<button type="button" class="btn btn-ghost btn-small" data-excerpt-idx="${idx}">${interpretHasExcerpt(c) ? 'Edit page text' : 'Add page text'}</button>`
+    : '';
+  const trust = typeof trustBadge === 'function'
+    ? trustBadge(i.trust || 'lead')
+    : '';
   return `<div class="hit-interpret ${esc(i.cls)}">
     <span class="hit-lens">${esc(i.badge)}${i.year ? ' · ' + i.year : ''}</span>
+    ${trust}
+    ${excerptChip}
     <span class="hit-why">${esc(i.why)}</span>
-    ${addBtn}
+    <div class="hit-interpret-actions">${addBtn}${textBtn}</div>
   </div>`;
+}
+
+function persistHitExcerpt(c, sourceId){
+  const s = typeof activeSession === 'function' ? activeSession() : null;
+  if(!s || !c) return;
+  if(!s.excerpts) s.excerpts = {};
+  if(c.url){
+    s.excerpts[c.url] = {
+      text: c.excerpt || '',
+      truncated: !!c.excerptTruncated,
+      at: Date.now()
+    };
+  }
+  if(sourceId && s.checks){
+    const prev = s.checks[sourceId] || {};
+    s.checks[sourceId] = Object.assign({}, prev, {
+      excerpt: c.excerpt || '',
+      excerptTruncated: !!c.excerptTruncated
+    });
+  }
+  s.updatedAt = Date.now();
+  if(typeof saveData === 'function') saveData();
+}
+
+function hydrateHitExcerpt(c){
+  if(!c || interpretHasExcerpt(c)) return c;
+  const s = typeof activeSession === 'function' ? activeSession() : null;
+  if(!s || !s.excerpts || !c.url) return c;
+  const row = s.excerpts[c.url];
+  if(row && row.text){
+    c.excerpt = row.text;
+    c.excerptTruncated = !!row.truncated;
+  }
+  return c;
+}
+
+function setHitExcerpt(idx, text, sourceId){
+  if(typeof RESULT_CACHE === 'undefined' || !RESULT_CACHE[idx]) return false;
+  const c = RESULT_CACHE[idx];
+  const norm = normalizeExcerpt(text);
+  c.excerpt = norm.text;
+  c.excerptTruncated = norm.truncated;
+  persistHitExcerpt(c, sourceId);
+  return { truncated: norm.truncated, length: norm.text.length };
+}
+
+function openHitExcerptForm(idx){
+  if(typeof RESULT_CACHE === 'undefined' || !RESULT_CACHE[idx]){
+    if(typeof showToast === 'function') showToast('No hit selected');
+    return;
+  }
+  hydrateHitExcerpt(RESULT_CACHE[idx]);
+  EXCERPT_EDIT_IDX = idx;
+  const c = RESULT_CACHE[idx];
+  const ta = document.getElementById('excerptText');
+  const title = document.getElementById('excerptModalTitle');
+  const notice = document.getElementById('excerptTruncNotice');
+  if(title) title.textContent = 'Page text — ' + String(c.label || 'hit').slice(0, 80);
+  if(ta) ta.value = c.excerpt || '';
+  if(notice) notice.textContent = '';
+  const el = document.getElementById('excerptOverlay');
+  if(el) el.classList.add('open');
+}
+
+function saveHitExcerpt(){
+  if(EXCERPT_EDIT_IDX < 0) return;
+  const ta = document.getElementById('excerptText');
+  const raw = ta ? ta.value : '';
+  const result = setHitExcerpt(EXCERPT_EDIT_IDX, raw);
+  const notice = document.getElementById('excerptTruncNotice');
+  if(result && result.truncated){
+    if(notice) notice.textContent = 'Saved first ' + EXCERPT_MAX_CHARS + ' characters (text was truncated).';
+    if(typeof showToast === 'function') showToast('Page text saved (truncated)');
+  } else {
+    if(notice) notice.textContent = '';
+    if(typeof showToast === 'function') showToast(result && result.length ? 'Page text saved — re-reading hit' : 'Page text cleared');
+  }
+  if(typeof closeOverlay === 'function') closeOverlay('excerptOverlay');
+  else {
+    const el = document.getElementById('excerptOverlay');
+    if(el) el.classList.remove('open');
+  }
+  // Re-paint live result cards that use RESULT_CACHE indices
+  if(typeof refreshLiveResultInterpret === 'function') refreshLiveResultInterpret();
+  else if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
+  EXCERPT_EDIT_IDX = -1;
+}
+
+function refreshLiveResultInterpret(){
+  if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
+  // Re-render interpret blocks on visible cards when we can find them by data-excerpt-idx parent
+  document.querySelectorAll('.result-card').forEach(card => {
+    const btn = card.querySelector('[data-excerpt-idx]');
+    if(!btn) return;
+    const idx = Number(btn.dataset.excerptIdx);
+    if(typeof RESULT_CACHE === 'undefined' || !RESULT_CACHE[idx]) return;
+    hydrateHitExcerpt(RESULT_CACHE[idx]);
+    const ctx = (typeof LAST_DISCOVERY_CTX !== 'undefined' && LAST_DISCOVERY_CTX) || {};
+    const host = card.querySelector('.hit-interpret');
+    const html = interpretHitHtml(RESULT_CACHE[idx], ctx, { idx });
+    if(host) host.outerHTML = html;
+    else {
+      const left = card.querySelector('.result-left');
+      if(left){
+        const note = left.querySelector('.result-note');
+        if(note) note.insertAdjacentHTML('afterend', html);
+      }
+    }
+  });
 }
 
 // ---------- Enslaver candidate ranking ----------
@@ -203,9 +386,42 @@ function rankEnslaverCandidates(personId, ctx, hits){
     });
   }
 
+  // Sibling / tree reuse: same enslaver entity or name on another plan
+  Object.keys(STATE.plans || {}).forEach(otherId => {
+    if(otherId === personId) return;
+    const otherPlan = STATE.plans[otherId];
+    if(!otherPlan || !Array.isArray(otherPlan.candidates)) return;
+    const otherPerson = STATE.people.find(p => p.id === otherId);
+    const otherLabel = otherPerson ? otherPerson.name : 'a relative';
+    otherPlan.candidates.forEach(c => {
+      let boost = 16;
+      if(c.status === 'promising') boost = 28;
+      if(c.status === 'confirmed') boost = 36;
+      if(c.status === 'ruled-out') boost = 2;
+      interpretBump(
+        map,
+        c.name,
+        boost,
+        'Also on ' + otherLabel + '’s plan (' + (c.status || 'untested') + ')'
+      );
+    });
+  });
+
+  // Discovery “found” coverage for this person boosts matching surnames
+  if(personId){
+    Object.values(STATE.sessions || {}).forEach(s => {
+      if(s.personId !== personId) return;
+      const hasFound = Object.values(s.checks || {}).some(ch => ch.status === 'found');
+      if(hasFound && s.surname){
+        interpretBump(map, s.surname, 22, 'Discovery marked a find while searching this surname');
+      }
+    });
+  }
+
   const list = Array.isArray(hits) ? hits : [];
   let preCount = 0;
   list.forEach(h=>{
+    hydrateHitExcerpt(h);
     const year = interpretExtractYear(h);
     const interp = interpretHit(h, ctx || {});
     if(interp.lens === 'enslaver-lead' || (year > 0 && year < 1865)){
@@ -215,8 +431,14 @@ function rankEnslaverCandidates(personId, ctx, hits){
     interpretExtractTitleSurnames(h.label, surname).forEach(n=>{
       interpretBump(map, n, 18, 'Named in a hit title: “' + String(h.label).slice(0, 60) + (h.label && h.label.length > 60 ? '…' : '') + '”');
     });
+    if(interpretHasExcerpt(h)){
+      interpretExtractTitleSurnames(h.excerpt, surname).forEach(n=>{
+        interpretBump(map, n, 22, 'Named in page excerpt: “' + String(n).slice(0, 40) + '”');
+      });
+    }
     if(interp.suggestCandidate && interp.candidateName){
-      interpretBump(map, interp.candidateName, 10, 'Flagged by hit interpretation');
+      interpretBump(map, interp.candidateName, interp.excerptBased ? 14 : 10,
+        interp.excerptBased ? 'Flagged from page excerpt' : 'Flagged by hit interpretation');
     }
   });
 
@@ -227,13 +449,19 @@ function rankEnslaverCandidates(personId, ctx, hits){
   }
 
   return [...map.values()]
-    .map(row => ({
-      name: row.name,
-      score: row.score,
-      reasons: row.reasons.slice(0, 3),
-      already: existing.has(row.name.toLowerCase()),
-      status: existing.get(row.name.toLowerCase()) || ''
-    }))
+    .map(row => {
+      const ent = typeof findEnslaverByNamePlace === 'function'
+        ? findEnslaverByNamePlace(row.name, (plan && plan.state) || '')
+        : null;
+      return {
+        name: row.name,
+        score: row.score,
+        reasons: row.reasons.slice(0, 3),
+        already: existing.has(row.name.toLowerCase()),
+        status: existing.get(row.name.toLowerCase()) || '',
+        enslaverId: ent ? ent.id : ''
+      };
+    })
     .filter(r => r.score >= 8)
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
     .slice(0, 8);
@@ -248,20 +476,28 @@ function addEnslaverCandidate(name, note){
     return false;
   }
   const person = STATE.people.find(p => p.id === personId);
-  const plan = ensurePlan(personId);
   const clean = String(name || '').trim();
   if(!clean) return false;
-  if(plan.candidates.some(c => String(c.name).toLowerCase() === clean.toLowerCase())){
+  const res = typeof linkPlanCandidate === 'function'
+    ? linkPlanCandidate(personId, clean, { note: note || 'From Discovery interpretation' })
+    : null;
+  if(res && !res.created){
     showToast('Already a candidate');
     return false;
   }
-  plan.candidates.push({
-    name: clean,
-    status: 'untested',
-    note: note || 'From Discovery interpretation'
-  });
-  plan.updatedAt = Date.now();
-  // Jump plan focus to enslaver step without marking others done
+  if(!res){
+    const plan = ensurePlan(personId);
+    if(plan.candidates.some(c => String(c.name).toLowerCase() === clean.toLowerCase())){
+      showToast('Already a candidate');
+      return false;
+    }
+    plan.candidates.push({
+      name: clean,
+      status: 'untested',
+      note: note || 'From Discovery interpretation'
+    });
+    plan.updatedAt = Date.now();
+  }
   activePlanPersonId = personId;
   saveData();
   if(typeof renderPlanView === 'function') renderPlanView();
@@ -284,11 +520,14 @@ function refreshHitInsightPanel(){
     return;
   }
 
+  hits.forEach(hydrateHitExcerpt);
   const ranked = rankEnslaverCandidates(personId, ctx, hits);
   const lensCounts = {};
+  let excerptCount = 0;
   hits.forEach(h=>{
     const i = interpretHit(h, ctx);
     lensCounts[i.lens] = (lensCounts[i.lens] || 0) + 1;
+    if(i.excerptBased) excerptCount++;
   });
   const lensLine = Object.keys(lensCounts).map(k=>{
     const meta = INTERPRET_LENSES[k] || INTERPRET_LENSES.general;
@@ -300,7 +539,10 @@ function refreshHitInsightPanel(){
       <div class="insight-label">Hit reading</div>
       ${typeof llmEnhanceBtnHtml === 'function' ? llmEnhanceBtnHtml('hits', personId || '') : ''}
     </div>
-    <div class="insight-summary">${hits.length ? esc(lensLine) : 'Live hits will be classified here as they arrive.'}</div>`;
+    <div class="insight-summary">${hits.length ? esc(lensLine) : 'Live hits will be classified here as they arrive.'}</div>
+    ${excerptCount
+      ? `<div class="insight-sub">${excerptCount} hit${excerptCount === 1 ? '' : 's'} read from page excerpt (OCR may err).</div>`
+      : (hits.length ? `<div class="insight-sub">Add page text on a hit to interpret belonging-to / servant language beyond the title.</div>` : '')}`;
 
   if(personId && ranked.length){
     html += `<div class="insight-label" style="margin-top:14px;">Ranked enslaver candidates</div>
@@ -330,8 +572,15 @@ function refreshHitInsightPanel(){
   el.innerHTML = html;
 }
 
-// Click handler for + Candidate buttons (delegation)
+// Click handler for + Candidate / Add page text (delegation)
 document.addEventListener('click', function(e){
+  const excerptBtn = e.target.closest('[data-excerpt-idx]');
+  if(excerptBtn){
+    e.preventDefault();
+    e.stopPropagation();
+    openHitExcerptForm(Number(excerptBtn.dataset.excerptIdx));
+    return;
+  }
   const btn = e.target.closest('[data-add-cand]');
   if(!btn) return;
   e.preventDefault();

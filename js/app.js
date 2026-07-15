@@ -31,8 +31,8 @@ const storage = {
 const STORAGE_KEY = 'forebear-genealogy-data-v1';
 const KEYS_STORAGE_KEY = 'forebear-api-keys-v1';
 const META_KEY = 'forebear-meta-v1';
-const SCHEMA_VERSION = 5;
-let STATE = { people: [], logs: [], plans: {}, tombstones: [], sessions: {} };
+const SCHEMA_VERSION = 7;
+let STATE = { people: [], logs: [], plans: {}, tombstones: [], sessions: {}, enslavers: {} };
 let META = { lastExportAt: 0, lastChangedAt: 0 };
 let API_KEYS = { smithsonian: '', llm: '', llmModel: 'gpt-4o-mini', llmUse: true };
 let editingPersonId = null;
@@ -72,7 +72,10 @@ function showToast(msg){
 // nameVariants/spouses on people and supports on logs; v3 adds
 // per-record updatedAt, deletion tombstones, and research plans;
 // v4 adds DNA workspace + Africa bridge fields on people, and
-// confidence on log entries.
+// confidence on log entries; v5 adds search sessions; v6 nests a
+// per-person research case file on each plan (hypotheses, questions);
+// v7 adds first-class enslaver entities; candidates link via enslaverId
+// (same normalized name + state merges across people).
 function migrate(parsed){
   const people = parsed.people || [];
   const logs = parsed.logs || [];
@@ -80,6 +83,9 @@ function migrate(parsed){
   const tombstones = parsed.tombstones || [];
   // v5: per-search "sessions" tracking which collections were checked
   const sessions = parsed.sessions || {};
+  let enslavers = parsed.enslavers && typeof parsed.enslavers === 'object' && !Array.isArray(parsed.enslavers)
+    ? parsed.enslavers
+    : {};
   const v = parsed.schemaVersion || 1;
   if(v < 2){
     people.forEach(p=>{
@@ -109,7 +115,31 @@ function migrate(parsed){
   }else{
     people.forEach(p=>{ if(typeof ensurePersonAfrica === 'function') ensurePersonAfrica(p); });
   }
-  return { schemaVersion: SCHEMA_VERSION, people, logs, plans, tombstones, sessions };
+  if(v < 6){
+    Object.keys(plans).forEach(id=>{
+      const plan = plans[id];
+      if(!plan || typeof plan !== 'object') return;
+      if(!plan.case || typeof plan.case !== 'object'){
+        plan.case = {
+          openQuestions: [],
+          hypotheses: [],
+          notes: '',
+          timeline: [],
+          updatedAt: plan.updatedAt || Date.now()
+        };
+      } else {
+        if(!Array.isArray(plan.case.openQuestions)) plan.case.openQuestions = [];
+        if(!Array.isArray(plan.case.hypotheses)) plan.case.hypotheses = [];
+        if(!Array.isArray(plan.case.timeline)) plan.case.timeline = [];
+        if(typeof plan.case.notes !== 'string') plan.case.notes = '';
+      }
+    });
+  }
+  if(typeof migratePlanCandidatesToEnslavers === 'function'){
+    // Idempotent: attach enslaverId on candidates; merge same name|state.
+    enslavers = migratePlanCandidatesToEnslavers(plans, enslavers);
+  }
+  return { schemaVersion: SCHEMA_VERSION, people, logs, plans, tombstones, sessions, enslavers };
 }
 
 function currentPayload(){
@@ -119,7 +149,8 @@ function currentPayload(){
     logs: STATE.logs,
     plans: STATE.plans,
     tombstones: STATE.tombstones,
-    sessions: STATE.sessions
+    sessions: STATE.sessions,
+    enslavers: STATE.enslavers || {}
   };
 }
 function setState(payload){
@@ -128,6 +159,9 @@ function setState(payload){
   STATE.plans = payload.plans || {};
   STATE.tombstones = payload.tombstones || [];
   STATE.sessions = payload.sessions || {};
+  STATE.enslavers = payload.enslavers && typeof payload.enslavers === 'object' && !Array.isArray(payload.enslavers)
+    ? payload.enslavers
+    : {};
 }
 
 // Merge two payloads: per-record newest-updatedAt wins, deletions win
@@ -164,7 +198,12 @@ function mergeStates(a, b){
     const sa = (a.sessions||{})[key], sb = (b.sessions||{})[key];
     sessions[key] = !sa ? sb : (!sb ? sa : ((sb.updatedAt||0) > (sa.updatedAt||0) ? sb : sa));
   });
-  return { schemaVersion: SCHEMA_VERSION, people, logs, plans, tombstones: Array.from(tomb.values()), sessions };
+  const enslavers = {};
+  new Set([...Object.keys(a.enslavers||{}), ...Object.keys(b.enslavers||{})]).forEach(id=>{
+    const ea = (a.enslavers||{})[id], eb = (b.enslavers||{})[id];
+    enslavers[id] = !ea ? eb : (!eb ? ea : ((eb.updatedAt||0) > (ea.updatedAt||0) ? eb : ea));
+  });
+  return { schemaVersion: SCHEMA_VERSION, people, logs, plans, tombstones: Array.from(tomb.values()), sessions, enslavers };
 }
 
 async function loadData(){
@@ -1253,11 +1292,12 @@ let RESULT_CACHE = [];
 function cacheResult(c){ return RESULT_CACHE.push(c) - 1; }
 function resultCard(c){
   const idx = cacheResult(c);
+  hydrateHitExcerpt(c);
   const ctx = (typeof LAST_DISCOVERY_CTX !== 'undefined' && LAST_DISCOVERY_CTX) || {};
   const interpretFn = typeof interpretHitHtmlWithLlm === 'function'
     ? interpretHitHtmlWithLlm
     : (typeof interpretHitHtml === 'function' ? interpretHitHtml : null);
-  const interpret = interpretFn ? interpretFn(c, ctx) : '';
+  const interpret = interpretFn ? interpretFn(c, ctx, { idx }) : '';
   return `<div class="result-card">
     <div class="result-left">
       ${c.source?`<div class="source-tag">${esc(c.source)}</div>`:''}
@@ -1309,10 +1349,13 @@ function openPreview(idx){
   const c = RESULT_CACHE[idx];
   if(!c || !c.preview) return;
   PREVIEW_IDX = idx;
+  hydrateHitExcerpt(c);
   const p = c.preview;
   document.getElementById('previewTitle').textContent = c.label;
   document.getElementById('previewMeta').textContent = [c.source, c.note].filter(Boolean).join(' — ');
   document.getElementById('previewOpenLink').href = c.url;
+  const excerptBtn = document.getElementById('previewExcerptBtn');
+  if(excerptBtn) excerptBtn.textContent = interpretHasExcerpt(c) ? 'Edit page text' : 'Add page text';
   const body = document.getElementById('previewBody');
   const zoom = document.getElementById('previewZoom');
   if(p.kind === 'iframe'){
@@ -1350,6 +1393,14 @@ document.getElementById('previewLogBtn').addEventListener('click', ()=>{
   closeOverlay('previewOverlay');
   if(c) queueLogFromResult(c);
 });
+const previewExcerptBtn = document.getElementById('previewExcerptBtn');
+if(previewExcerptBtn){
+  previewExcerptBtn.addEventListener('click', ()=>{
+    if(PREVIEW_IDX < 0) return;
+    closeOverlay('previewOverlay');
+    if(typeof openHitExcerptForm === 'function') openHitExcerptForm(PREVIEW_IDX);
+  });
+}
 document.getElementById('toolkitResults').addEventListener('click', e=>{
   const logBtn = e.target.closest('[data-log-idx]');
   if(logBtn){
@@ -1441,7 +1492,13 @@ function markSourceOpened(sourceId){
   if(!s || !sourceId) return;
   // don't downgrade an already-resolved collection back to "opened"
   if(s.checks[sourceId] && s.checks[sourceId].status !== 'opened') return;
-  s.checks[sourceId] = { status: 'opened', at: Date.now() };
+  const prev = s.checks[sourceId] || {};
+  s.checks[sourceId] = {
+    status: 'opened',
+    at: Date.now(),
+    excerpt: prev.excerpt || '',
+    excerptTruncated: !!prev.excerptTruncated
+  };
   s.updatedAt = Date.now();
   saveData();
   // re-render after the new tab has been launched
@@ -1451,7 +1508,13 @@ function resolveSource(sourceId, status){
   const s = activeSession();
   const card = QUICKLINK_CACHE[sourceId];
   if(!s || !card || (status !== 'found' && status !== 'nothing')) return;
-  s.checks[sourceId] = { status, at: Date.now() };
+  const prev = s.checks[sourceId] || {};
+  s.checks[sourceId] = {
+    status,
+    at: Date.now(),
+    excerpt: prev.excerpt || '',
+    excerptTruncated: !!prev.excerptTruncated
+  };
   s.updatedAt = Date.now();
   const place = [s.county, s.state].filter(Boolean).join(', ');
   const personId = sessionPersonId();
@@ -1461,6 +1524,7 @@ function resolveSource(sourceId, status){
     type: card.type || 'Other',
     personId,
     surname: s.surname,
+    variants: s.variants || [],
     place,
     status: status === 'nothing' ? 'nothing' : 'found'
   };
@@ -1631,11 +1695,22 @@ async function searchSmithsonian(container, ctx){
       const title = r.title || (dnr.title && dnr.title.content) || 'Untitled record';
       const unit = r.unitCode || '';
       const link = dnr.record_link || (dnr.guid ? `https://www.si.edu/object/${dnr.guid}` : '#');
-      const note = [unit ? ('Unit: '+unit) : '', extractFreetext(r)].filter(Boolean).join(' — ');
+      const ft = extractFreetext(r);
+      const note = [unit ? ('Unit: '+unit) : '', ft].filter(Boolean).join(' — ');
       const media = (dnr.online_media && dnr.online_media.media) || [];
       const img = media.length ? String(media[0].thumbnail || media[0].content || '') : '';
       const preview = /^https?:\/\//.test(img) ? { kind: 'image', sizes: [img], initial: 0 } : null;
-      return resultCard({label: title, note, url: link, type: "Freedmen's Bureau Record", source: 'Smithsonian', preview});
+      const excerptNorm = typeof normalizeExcerpt === 'function' ? normalizeExcerpt(ft) : { text: ft || '', truncated: false };
+      return resultCard({
+        label: title,
+        note,
+        url: link,
+        type: "Freedmen's Bureau Record",
+        source: 'Smithsonian',
+        preview,
+        excerpt: excerptNorm.text || undefined,
+        excerptTruncated: excerptNorm.truncated || undefined
+      });
     }).join('');
     if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   }catch(e){
@@ -1848,11 +1923,20 @@ function addSurnameAsCandidate(){
   const person = STATE.people.find(p=>p.id===s.personId);
   if(!person || typeof ensurePlan !== 'function') return;
   const plan = ensurePlan(s.personId);
-  if(plan.candidates.some(c=>String(c.name).toLowerCase() === s.surname.toLowerCase())){
+  if(typeof linkPlanCandidate === 'function'){
+    const res = linkPlanCandidate(s.personId, s.surname, {
+      note: 'From earliest-mentions surname hypothesis (Field Guide §6)'
+    });
+    if(res && !res.created){
+      showToast('Already a candidate');
+      return;
+    }
+  } else if(plan.candidates.some(c=>String(c.name).toLowerCase() === s.surname.toLowerCase())){
     showToast('Already a candidate');
     return;
+  } else {
+    plan.candidates.push({ name: s.surname, status: 'untested' });
   }
-  plan.candidates.push({ name: s.surname, status: 'untested' });
   plan.updatedAt = Date.now();
   saveData();
   if(typeof renderPlanView === 'function') renderPlanView();
@@ -1911,6 +1995,7 @@ function runDiscovery(forPersonId, mode){
       </div>
     </div>
     <div id="quickLinks"></div>
+    <div id="agentQueueDiscovery">${typeof agentQueueHtml === 'function' ? agentQueueHtml() : ''}</div>
     <div id="hitInsight"></div>
     <div id="strategyArea"></div>
   `;

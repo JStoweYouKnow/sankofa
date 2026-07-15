@@ -38,6 +38,7 @@
         <button type="button" onclick="exportJSON()">↓ Export backup (.json)</button>
         <button type="button" onclick="exportGEDCOM()">↓ Export tree (.ged)</button>
         <button type="button" onclick="document.getElementById('importFile').click()">↑ Import backup</button>
+        <button type="button" onclick="document.getElementById('gedcomFile').click()">↑ Import GEDCOM</button>
         <button type="button" onclick="openSyncModal()">⇄ Family sync</button>
         <button type="button" onclick="openWelcome()">ℹ How this works</button>
       </div>
@@ -48,6 +49,7 @@
         <a class="feedback-link" href="https://github.com/JStoweYouKnow/sankofa/issues/new?labels=beta-feedback&template=beta_feedback.md" target="_blank" rel="noopener">Feedback</a>
       </div>
       <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+      <input type="file" id="gedcomFile" accept=".ged,.gedcom,text/plain" style="display:none">
     </div>
   </div>
 
@@ -127,6 +129,16 @@
             </div>
             <div class="key-status" id="statusLlm"><span class="key-dot"></span> Not connected</div>
           </div>
+        </div>
+        <div class="key-field companion-field" style="margin-top:16px;">
+          <label>Browser companion <span class="toggle-hint">(optional)</span></label>
+          <div class="field-hint">Sideload the Chrome extension in <code>extension/</code> to capture FamilySearch results you already have open. Review before import — never required for core research. <a href="extension/README.md" target="_blank" rel="noopener">Install notes</a>.</div>
+          <div class="key-status" id="statusCompanion"><span class="key-dot"></span> Not installed</div>
+          <div class="plan-actions" style="margin-top:8px;">
+            <button type="button" class="btn btn-small btn-ghost" id="companionReviewBtn" style="display:none;" onclick="companionShowReview()">Review capture</button>
+            <button type="button" class="btn btn-ghost btn-small" onclick="companionPing();companionRequestHits();showToast('Pinged companion')">Refresh status</button>
+          </div>
+          <div id="companionReview" style="margin-top:10px;"></div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-top:14px;">
           <button class="btn btn-small" onclick="saveKeys()">Save keys</button>
@@ -342,6 +354,13 @@
         <div class="field full">
           <label>Key African or diaspora matches</label>
           <textarea id="pDnaMatches" rows="2" placeholder="Match name or initials, shared cM, hypothesized connection"></textarea>
+          <div class="dna-csv-row">
+            <label class="btn btn-ghost btn-small" style="cursor:pointer;margin-top:6px;">
+              Import matches CSV
+              <input type="file" id="dnaMatchFile" accept=".csv,text/csv,text/plain" style="display:none">
+            </label>
+            <span class="field-hint">Columns: name, company, ethnicity notes (optional shared cM). Appends to the list — never confirms a region.</span>
+          </div>
         </div>
         <div class="field full">
           <label>Shared segments / cluster notes</label>
@@ -512,6 +531,22 @@
   </div>
 </div>
 
+<!-- ===== GEDCOM IMPORT MODAL ===== -->
+<div class="overlay" id="gedcomOverlay">
+  <div class="modal">
+    <button class="close-x" onclick="cancelGedcomImport()">✕</button>
+    <div class="modal-title">Import GEDCOM</div>
+    <div class="modal-sub" id="gedcomSummary"></div>
+    <p class="field-hint">People are added with new ids (no smart merge yet). Existing tree data is kept. Each imported person gets an empty research plan and case file.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="cancelGedcomImport()">Cancel</button>
+      <div class="modal-actions-right">
+        <button type="button" class="btn" onclick="applyGedcomImport()">Add to my tree</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== FAMILY SYNC MODAL ===== -->
 <div class="overlay" id="syncOverlay">
   <div class="modal">
@@ -554,9 +589,29 @@
     <div class="preview-actions">
       <div id="previewZoom" class="preview-zoom"></div>
       <div class="modal-actions-right">
+        <button type="button" class="btn btn-ghost" id="previewExcerptBtn">Add page text</button>
         <a class="btn btn-ghost" id="previewOpenLink" href="#" target="_blank" rel="noopener">Open original ↗</a>
         <button type="button" class="btn" id="previewLogBtn">+ Log this record</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PAGE TEXT / EXCERPT MODAL ===== -->
+<div class="overlay" id="excerptOverlay">
+  <div class="modal excerpt-modal">
+    <button class="close-x" onclick="closeOverlay('excerptOverlay')">✕</button>
+    <div class="modal-title" id="excerptModalTitle">Page text</div>
+    <div class="modal-sub">Paste OCR, a transcript, or text you can see on the page. Forebear re-reads the hit for belonging-to / servant clues. OCR can err — readings are labeled excerpt-based.</div>
+    <div class="field full">
+      <label for="excerptText">Page text</label>
+      <textarea id="excerptText" rows="8" placeholder="e.g. …one negro man named Tom belonging to Jasper Rhyne of Gaston County…"></textarea>
+      <div class="field-hint">Stored with this Discovery hit and session. Long pastes are truncated at 8,000 characters.</div>
+      <div class="field-hint" id="excerptTruncNotice" style="color:var(--oxblood);"></div>
+    </div>
+    <div class="modal-actions-right" style="margin-top:12px;">
+      <button type="button" class="btn btn-ghost" onclick="closeOverlay('excerptOverlay')">Cancel</button>
+      <button type="button" class="btn" onclick="saveHitExcerpt()">Save &amp; re-read</button>
     </div>
   </div>
 </div>
@@ -619,12 +674,17 @@
 <script src="js/sources.js"></script>
 <script src="js/africa.js"></script>
 <script src="js/app.js"></script>
+<script src="js/trust.js"></script>
 <script src="js/plan.js"></script>
+<script src="js/gedcom.js"></script>
+<script src="js/enslaver.js"></script>
 <script src="js/coach.js"></script>
 <script src="js/story.js"></script>
 <script src="js/interpret.js"></script>
 <script src="js/synthesize.js"></script>
 <script src="js/llm.js"></script>
+<script src="js/companion.js"></script>
+<script src="js/agent.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/sample.js"></script>
 </body>

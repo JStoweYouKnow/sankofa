@@ -66,6 +66,34 @@ function synthReadiness(personId){
 }
 
 /**
+ * Africa ethnonym / voyage “agent” proposals require paper-trail readiness
+ * plus a case-file foothold (lead, coverage, or candidate). DNA questions
+ * remain available earlier.
+ */
+function synthAfricaAgentReady(personId){
+  const paper = synthReadiness(personId);
+  if(!paper.ready){
+    return { ready: false, reason: paper.reason, paperReady: false };
+  }
+  const plan = STATE.plans[personId];
+  const kase = plan && plan.case;
+  const hasHyp = !!(kase && (kase.hypotheses || []).some(h =>
+    h.status === 'lead' || h.status === 'hypothesis' || h.status === 'confirmed' || h.status === 'ruled_out'
+  ));
+  const hasCand = !!(plan && (plan.candidates || []).length);
+  const cov = typeof caseCoverageSummary === 'function' ? caseCoverageSummary(personId) : { total: 0 };
+  const hasCoverage = !!(cov && cov.total >= 1);
+  if(hasHyp || hasCand || hasCoverage){
+    return { ready: true, reason: paper.reason, paperReady: true };
+  }
+  return {
+    ready: false,
+    paperReady: true,
+    reason: 'Add an enslaver lead or Discovery coverage to the case file before treating Africa ethnonyms as more than speculation.'
+  };
+}
+
+/**
  * @returns {{
  *   ready: boolean,
  *   readinessNote: string,
@@ -97,6 +125,9 @@ function synthesizeBridge(personId){
   const plan = STATE.plans[personId] || null;
   const logs = synthPersonLogs(personId);
   const readiness = synthReadiness(personId);
+  const africaReady = typeof synthAfricaAgentReady === 'function'
+    ? synthAfricaAgentReady(personId)
+    : readiness;
   const facts = typeof evidencedFacts === 'function' ? evidencedFacts(personId) : [];
   const confirmed = logs.filter(l => l.status === 'confirmed');
   const eth = typeof ethnonymById === 'function' ? ethnonymById(a.ethnonymId) : null;
@@ -198,18 +229,21 @@ function synthesizeBridge(personId){
     person.notes,
     ...logs.map(l => [l.findings, l.nextSteps, l.sourceName].filter(Boolean).join(' '))
   ].join('\n');
-  synthDetectEthnonyms(corpus).forEach(e=>{
-    if(seenEth.has(e.id)) return;
-    seenEth.add(e.id);
-    hypotheses.push({
-      label: 'Possible ethnonym in your notes: ' + e.label,
-      detail: e.note + ' Region: ' + e.region + '.',
-      confidence: 'speculative',
-      ethnonymId: e.id
+  // Ethnonym mining from notes is agentic — only when case + paper trail pass
+  if(africaReady.ready){
+    synthDetectEthnonyms(corpus).forEach(e=>{
+      if(seenEth.has(e.id)) return;
+      seenEth.add(e.id);
+      hypotheses.push({
+        label: 'Possible ethnonym in your notes: ' + e.label,
+        detail: e.note + ' Region: ' + e.region + '.',
+        confidence: 'speculative',
+        ethnonymId: e.id
+      });
     });
-  });
+  }
 
-  // DNA questions
+  // DNA questions (always available — not gated)
   const dnaQuestions = [];
   if(!d.company){
     dnaQuestions.push('Take an autosomal test (AncestryDNA, 23andMe, MyHeritage, or FTDNA) and enter the company + ethnicity breakdown on the person card.');
@@ -221,7 +255,7 @@ function synthesizeBridge(personId){
       dnaQuestions.push('From the breakdown, write one hypothesized African region (e.g. Bight of Biafra / SE Nigeria) — mark confidence DNA-supported, not documentary.');
     }
     if(!d.keyMatches){
-      dnaQuestions.push('List African or recent-immigrant diaspora matches (initials, shared cM, tree hints) — shared matches often beat raw percentages.');
+      dnaQuestions.push('Import or list African / diaspora DNA matches (CSV: name, company, ethnicity notes) — shared matches often beat raw percentages.');
     }
     if(!d.sharedSegments){
       dnaQuestions.push('Optional: note clusters or DNAPainter segments that seem to ride with this ancestral line.');
@@ -240,6 +274,11 @@ function synthesizeBridge(personId){
     narrative = 'Bridge to Africa is still early for ' + person.name
       + '. Push the American or Caribbean paper trail until you have a named confirming source; use DNA and oral tradition as hypotheses only. '
       + readiness.reason;
+  } else if(!africaReady.ready){
+    narrative = 'Paper trail is ready for ' + person.name
+      + ', but the emancipation case file still needs a foothold (enslaver lead or Discovery coverage) before ethnonym proposals. '
+      + africaReady.reason
+      + ' DNA questions below remain fair game.';
   } else {
     const regionBit = a.regionClaim || d.hypothesizedRegion || (eth && eth.region)
       || 'no region claim yet';
@@ -254,9 +293,13 @@ function synthesizeBridge(personId){
   const nextActions = [];
   if(!readiness.ready){
     nextActions.push({ label: 'Finish Confirm step / log a named source', kind: 'open-plan' });
+    nextActions.push({ label: 'Open DNA workspace', kind: 'edit-person-dna' });
     nextActions.push({ label: 'Search Discovery', kind: 'discover' });
+  } else if(!africaReady.ready){
+    nextActions.push({ label: 'Add enslaver lead on plan', kind: 'open-plan' });
+    nextActions.push({ label: 'Open DNA workspace', kind: 'edit-person-dna' });
   } else {
-    if(!d.company) nextActions.push({ label: 'Open DNA workspace', kind: 'edit-person' });
+    if(!d.company || !d.keyMatches) nextActions.push({ label: 'Open DNA workspace', kind: 'edit-person-dna' });
     nextActions.push({ label: 'Open Slave Voyages', kind: 'voyages' });
     if(a.africanGivenName || hypotheses.some(h => h.ethnonymId)){
       nextActions.push({ label: 'Search African Origins', kind: 'origins' });
@@ -266,7 +309,8 @@ function synthesizeBridge(personId){
 
   return {
     ready: readiness.ready,
-    readinessNote: readiness.reason,
+    africaAgentReady: !!africaReady.ready,
+    readinessNote: !readiness.ready ? readiness.reason : (!africaReady.ready ? africaReady.reason : readiness.reason),
     narrative,
     known,
     gaps: gaps.slice(0, 8),
@@ -293,14 +337,21 @@ function synthesizeBridgeHtml(personId){
   const gaps = s.gaps.map(x => `<li>${synthEsc(x)}</li>`).join('');
   const hyps = s.hypotheses.length
     ? s.hypotheses.map(h=>{
-        const apply = h.ethnonymId && (!person.africa || person.africa.ethnonymId !== h.ethnonymId)
+        const canApply = s.africaAgentReady !== false && h.ethnonymId
+          && (!person.africa || person.africa.ethnonymId !== h.ethnonymId);
+        const apply = canApply
           ? `<button type="button" class="btn btn-ghost btn-small" data-synth-eth="${synthEsc(h.ethnonymId)}" data-synth-person="${synthEsc(personId)}">Use on card</button>`
-          : '';
+          : (h.ethnonymId && s.africaAgentReady === false
+            ? `<span class="field-hint">Ethnonym apply gated until case is ready</span>`
+            : '');
         const conf = (typeof confidenceChip === 'function')
           ? confidenceChip(h.confidence)
           : `<span class="confidence-chip">${synthEsc(h.confidence)}</span>`;
+        const trust = typeof trustBadge === 'function'
+          ? trustBadge(typeof trustFromConfidence === 'function' ? trustFromConfidence(h.confidence) : 'lead')
+          : '';
         return `<div class="synth-hyp">
-          <div class="synth-hyp-head">${conf} <strong>${synthEsc(h.label)}</strong> ${apply}</div>
+          <div class="synth-hyp-head">${trust}${conf} <strong>${synthEsc(h.label)}</strong> ${apply}</div>
           <div class="synth-hyp-detail">${synthEsc(h.detail)}</div>
         </div>`;
       }).join('')
@@ -308,15 +359,18 @@ function synthesizeBridgeHtml(personId){
 
   const dnaQ = s.dnaQuestions.map(x => `<li>${synthEsc(x)}</li>`).join('');
   const actions = s.nextActions.map(a=>
-    `<button type="button" class="btn btn-small${a.kind === 'edit-person' || a.kind === 'discover' ? ' btn-ghost' : ''}" data-synth-act="${synthEsc(a.kind)}" data-synth-person="${synthEsc(personId)}">${synthEsc(a.label)}</button>`
+    `<button type="button" class="btn btn-small${a.kind === 'edit-person' || a.kind === 'edit-person-dna' || a.kind === 'discover' ? ' btn-ghost' : ''}" data-synth-act="${synthEsc(a.kind)}" data-synth-person="${synthEsc(personId)}">${synthEsc(a.label)}</button>`
   ).join('');
   const aiBtn = typeof llmEnhanceBtnHtml === 'function'
     ? llmEnhanceBtnHtml('synth', personId)
     : '';
 
-  return `<div class="synth-panel ${s.ready ? 'synth-ready' : 'synth-early'}${s._llm ? ' synth-ai' : ''}">
+  return `<div class="synth-panel ${s.ready ? 'synth-ready' : 'synth-early'}${s.africaAgentReady ? ' synth-africa-ready' : ''}${s._llm ? ' synth-ai' : ''}">
     <div class="synth-top">
       <div class="synth-label">Bridge synthesis · ${synthEsc(person.name)}</div>
+      ${typeof trustBadge === 'function' ? trustBadge(s.africaAgentReady ? 'hypothesis' : 'lead', {
+        label: s.africaAgentReady ? 'Africa agent ready' : 'DNA only · case gate'
+      }) : ''}
       ${s._llm ? '<span class="ai-pill">AI polished</span>' : ''}
       ${aiBtn}
     </div>
@@ -355,9 +409,12 @@ function runSynthAction(personId, kind){
     if(typeof discoverPerson === 'function') discoverPerson(personId);
     return;
   }
-  if(kind === 'edit-person'){
+  if(kind === 'edit-person' || kind === 'edit-person-dna'){
+    if(kind === 'edit-person-dna' && typeof openDnaWorkspace === 'function'){
+      openDnaWorkspace(personId);
+      return;
+    }
     openPersonForm(personId);
-    // Expand DNA / Africa sections when possible
     setTimeout(()=>{
       if(typeof setFormSection === 'function'){
         setFormSection('dnaSection', true);
@@ -423,12 +480,21 @@ function runSynthAction(personId, kind){
 function applySynthEthnonym(personId, ethnonymId){
   const person = STATE.people.find(p => p.id === personId);
   if(!person || !ethnonymId) return;
+  const gate = typeof synthAfricaAgentReady === 'function' ? synthAfricaAgentReady(personId) : { ready: true };
+  if(!gate.ready){
+    if(typeof showToast === 'function') showToast(gate.reason || 'Case not ready for ethnonym apply');
+    return;
+  }
   ensurePersonAfrica(person);
   person.africa.ethnonymId = ethnonymId;
   const eth = ethnonymById(ethnonymId);
   if(eth && !person.africa.regionClaim) person.africa.regionClaim = eth.region;
   if(!person.africa.regionConfidence || person.africa.regionConfidence === 'speculative'){
     person.africa.regionConfidence = 'oral';
+  }
+  // AI / one-click apply can never promote to documentary/confirmed
+  if(typeof trustClampConfidence === 'function'){
+    person.africa.regionConfidence = trustClampConfidence(person.africa.regionConfidence);
   }
   person.updatedAt = Date.now();
   saveData();

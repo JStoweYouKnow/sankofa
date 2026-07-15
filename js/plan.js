@@ -55,17 +55,118 @@ const PLAN_STEPS = [
 // and slave-schedule links live on steps 1 and 4 instead — driven by
 // `planChecklist` flags in js/sources.js.
 
+const CASE_STATUSES = {
+  lead: 'Lead',
+  hypothesis: 'Hypothesis',
+  confirmed: 'Confirmed',
+  ruled_out: 'Ruled out'
+};
+
+function emptyCase(){
+  return {
+    openQuestions: [],
+    hypotheses: [],
+    notes: '',
+    timeline: [],
+    updatedAt: Date.now()
+  };
+}
+
 function emptyPlan(){
   const steps = {};
   PLAN_STEPS.forEach(s=>{ steps[s.key] = { done:false, note:'', checked:{} }; });
-  return { updatedAt: Date.now(), state:'', county:'', fieldOffice:'', steps, candidates: [] };
+  return {
+    updatedAt: Date.now(),
+    state:'',
+    county:'',
+    fieldOffice:'',
+    steps,
+    candidates: [],
+    case: emptyCase()
+  };
 }
+
+function seedCaseFromPlan(personId, plan){
+  const kase = plan.case;
+  if(!kase) return;
+  const open = PLAN_STEPS.find(s => !(plan.steps[s.key] && plan.steps[s.key].done));
+  if(open && !kase.openQuestions.length){
+    kase.openQuestions.push('How do we advance: ' + open.title + '?');
+  }
+  (plan.candidates || []).forEach(cand => {
+    const name = (cand.name || '').trim();
+    if(!name) return;
+    const exists = kase.hypotheses.some(h =>
+      (h.enslaverName || '').toLowerCase() === name.toLowerCase() ||
+      (h.text || '').toLowerCase().includes(name.toLowerCase())
+    );
+    if(exists) return;
+    let status = 'lead';
+    if(cand.status === 'promising') status = 'hypothesis';
+    else if(cand.status === 'confirmed') status = 'confirmed';
+    else if(cand.status === 'ruled-out') status = 'ruled_out';
+    kase.hypotheses.push({
+      id: 'h' + Math.random().toString(36).slice(2, 10),
+      text: 'Test whether “' + name + '” held or employed this family — a shared surname is a lead, not proof.',
+      status,
+      enslaverName: name,
+      createdAt: Date.now()
+    });
+  });
+  kase.updatedAt = Date.now();
+}
+
+function ensureCase(personId){
+  const plan = ensurePlan(personId);
+  const fresh = !plan.case || typeof plan.case !== 'object';
+  if(fresh){
+    plan.case = emptyCase();
+    seedCaseFromPlan(personId, plan);
+  } else {
+    if(!Array.isArray(plan.case.openQuestions)) plan.case.openQuestions = [];
+    if(!Array.isArray(plan.case.hypotheses)) plan.case.hypotheses = [];
+    if(!Array.isArray(plan.case.timeline)) plan.case.timeline = [];
+    if(typeof plan.case.notes !== 'string') plan.case.notes = '';
+    if(!plan.case.hypotheses.length && (plan.candidates || []).length){
+      seedCaseFromPlan(personId, plan);
+    }
+  }
+  return plan.case;
+}
+
+function caseAppendTimeline(personId, entry){
+  const kase = ensureCase(personId);
+  if(!Array.isArray(kase.timeline)) kase.timeline = [];
+  kase.timeline.push(Object.assign({ at: Date.now() }, entry || {}));
+  if(kase.timeline.length > 40) kase.timeline = kase.timeline.slice(-40);
+  kase.updatedAt = Date.now();
+}
+
+function caseCoverageSummary(personId){
+  let opened = 0, found = 0, nothing = 0;
+  Object.values(STATE.sessions || {}).forEach(s => {
+    if(s.personId !== personId) return;
+    Object.values(s.checks || {}).forEach(ch => {
+      if(ch.status === 'opened') opened++;
+      else if(ch.status === 'found') found++;
+      else if(ch.status === 'nothing') nothing++;
+    });
+  });
+  return { opened, found, nothing, total: opened + found + nothing };
+}
+
+function caseOpenHypothesis(personId){
+  const kase = ensureCase(personId);
+  return (kase.hypotheses || []).find(h => h.status === 'lead' || h.status === 'hypothesis') || null;
+}
+
 function ensurePlan(personId){
   if(!STATE.plans[personId]) STATE.plans[personId] = emptyPlan();
   const plan = STATE.plans[personId];
   PLAN_STEPS.forEach(s=>{ if(!plan.steps[s.key]) plan.steps[s.key] = { done:false, note:'', checked:{} }; });
   if(!Array.isArray(plan.candidates)) plan.candidates = [];
   if(plan.fieldOffice === undefined) plan.fieldOffice = '';
+  if(!plan.case || typeof plan.case !== 'object') plan.case = emptyCase();
   return plan;
 }
 function activePlan(){
@@ -171,6 +272,9 @@ function renderPlanView(){
     </div>`;
   }
 
+  html += caseFileHtml(activePlanPersonId, person, plan);
+  html += `<div id="agentQueueHost">${typeof agentQueueHtml === 'function' ? agentQueueHtml() : ''}</div>`;
+
   html += `<div class="plan-context">
     <div class="field">
       <label>Place they lived around emancipation / 1870</label>
@@ -229,6 +333,150 @@ function planLog(idx){
     }));
   }
   openLogForm(null, pf);
+}
+
+function caseKnownFacts(person, plan){
+  const bits = [];
+  if((person.name || '').trim()) bits.push(person.name.trim());
+  if(person.birthYear) bits.push('b. c. ' + person.birthYear);
+  const place = [plan.county, plan.state].filter(Boolean).join(', ') || (person.birthplace || '').trim();
+  if(place) bits.push(place);
+  if((person.enslaverSurname || '').trim()) bits.push('enslaver hint: ' + person.enslaverSurname.trim());
+  const variants = (person.nameVariants || []).filter(Boolean);
+  if(variants.length) bits.push('also: ' + variants.slice(0, 4).join(', '));
+  return bits;
+}
+
+function caseFileHtml(personId, person, plan){
+  const kase = ensureCase(personId);
+  const cov = caseCoverageSummary(personId);
+  const known = caseKnownFacts(person, plan);
+  const knownHtml = known.length
+    ? `<ul class="case-known-list">${known.map(k => `<li>${esc(k)}</li>`).join('')}</ul>`
+    : `<p class="case-empty">Add a name, year, or place — the case fills as you research.</p>`;
+
+  const timeline = (kase.timeline || []).slice(-4).reverse();
+  const timelineHtml = timeline.length
+    ? `<ul class="case-known-list">${timeline.map(t =>
+        `<li><span class="field-hint">${esc(t.kind || 'event')}</span> ${esc(t.text || '')}</li>`
+      ).join('')}</ul>`
+    : '';
+
+  const qHtml = kase.openQuestions.length
+    ? `<ul class="case-q-list">${kase.openQuestions.map((q, i) =>
+        `<li><span>${esc(q)}</span>
+          <button type="button" class="btn btn-ghost btn-small" onclick="removeCaseQuestion('${esc(personId)}',${i})" title="Remove">✕</button>
+        </li>`).join('')}</ul>`
+    : `<p class="case-empty">No open questions yet — add what you’re trying to prove or disprove.</p>`;
+
+  const hHtml = kase.hypotheses.length
+    ? `<ul class="case-h-list">${kase.hypotheses.map(h => {
+        const badge = typeof trustBadge === 'function'
+          ? trustBadge(h.status)
+          : `<span class="case-trust case-trust-${esc(h.status)}">${esc(CASE_STATUSES[h.status] || h.status)}</span>`;
+        return `<li>
+          ${badge}
+          <span class="case-h-text">${esc(h.text)}</span>
+          <select class="case-h-status" onchange="setCaseHypothesisStatus('${esc(personId)}','${esc(h.id)}',this.value)" aria-label="Hypothesis status">
+            ${Object.keys(CASE_STATUSES).map(k =>
+              `<option value="${k}" ${h.status===k?'selected':''}>${esc(CASE_STATUSES[k])}</option>`
+            ).join('')}
+          </select>
+        </li>`;
+      }).join('')}</ul>`
+    : `<p class="case-empty">No hypotheses yet. Candidates on step 4 become leads here automatically.</p>`;
+
+  const covLabel = cov.total
+    ? `${cov.found} found · ${cov.nothing} dead ends · ${cov.opened} opened`
+    : 'No Discovery coverage yet';
+
+  return `<div class="case-file" id="caseFile">
+    <div class="case-file-head">
+      <div class="case-file-title">Case file</div>
+      <div class="case-coverage" title="From Discovery sessions linked to this person">${esc(covLabel)}</div>
+    </div>
+    <div class="case-section">
+      <div class="case-section-label">Known so far</div>
+      ${knownHtml}
+    </div>
+    ${timelineHtml ? `<div class="case-section"><div class="case-section-label">Recent agent activity</div>${timelineHtml}</div>` : ''}
+    <div class="case-section">
+      <div class="case-section-label">Open questions</div>
+      ${qHtml}
+      <div class="case-add-row">
+        <input type="text" id="caseQuestionInput" placeholder="e.g. Which county held the family in 1860?" maxlength="240">
+        <button type="button" class="btn btn-small" onclick="addCaseQuestion('${esc(personId)}')">Add</button>
+      </div>
+    </div>
+    <div class="case-section">
+      <div class="case-section-label">Hypotheses</div>
+      ${hHtml}
+      <div class="case-add-row">
+        <input type="text" id="caseHypothesisInput" placeholder="e.g. Rhyne may be the enslaver surname to test" maxlength="280">
+        <button type="button" class="btn btn-small" onclick="addCaseHypothesis('${esc(personId)}')">Add lead</button>
+      </div>
+    </div>
+    <div class="case-section">
+      <div class="case-section-label">Case notes</div>
+      <textarea class="case-notes" rows="2" placeholder="Working notes for this research case…" onchange="setCaseNotes('${esc(personId)}', this.value)">${esc(kase.notes || '')}</textarea>
+    </div>
+  </div>`;
+}
+
+function addCaseQuestion(personId){
+  const input = document.getElementById('caseQuestionInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Type a question first'); return; }
+  const kase = ensureCase(personId);
+  kase.openQuestions.push(text);
+  kase.updatedAt = Date.now();
+  touchPlan();
+  saveData();
+  renderPlanView();
+}
+function removeCaseQuestion(personId, idx){
+  const kase = ensureCase(personId);
+  kase.openQuestions.splice(idx, 1);
+  kase.updatedAt = Date.now();
+  touchPlan();
+  saveData();
+  renderPlanView();
+}
+function addCaseHypothesis(personId){
+  const input = document.getElementById('caseHypothesisInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Type a hypothesis first'); return; }
+  const kase = ensureCase(personId);
+  kase.hypotheses.push({
+    id: 'h' + Math.random().toString(36).slice(2, 10),
+    text,
+    status: 'lead',
+    enslaverName: '',
+    createdAt: Date.now()
+  });
+  kase.updatedAt = Date.now();
+  touchPlan();
+  saveData();
+  renderPlanView();
+  showToast('Lead added to case file');
+}
+function setCaseHypothesisStatus(personId, hypId, status){
+  const kase = ensureCase(personId);
+  const h = kase.hypotheses.find(x => x.id === hypId);
+  if(!h) return;
+  if(!CASE_STATUSES[status]) return;
+  h.status = status;
+  kase.updatedAt = Date.now();
+  touchPlan();
+  saveData();
+  renderPlanView();
+}
+function setCaseNotes(personId, notes){
+  const kase = ensureCase(personId);
+  kase.notes = String(notes || '');
+  kase.updatedAt = Date.now();
+  touchPlan();
+  saveData();
 }
 
 function planStepActions(key, person, plan){
@@ -294,14 +542,32 @@ function planStepActions(key, person, plan){
   if(key === 'enslaver'){
     const hasEnslaverHint = person.enslaverSurname
       ? `<div class="field-hint" style="margin-bottom:8px;">From the tree: this person's associated enslaver surname is "${esc(person.enslaverSurname)}" — add it below if you haven't.</div>` : '';
+    const ranked = typeof rankEnslaverCandidates === 'function'
+      ? rankEnslaverCandidates(person.id, planCtx(person, plan), [])
+      : [];
+    const rankHtml = ranked.length
+      ? `<div class="enslaver-rank">
+          <div class="case-section-label">Ranked across your tree</div>
+          <ol class="enslaver-rank-list">${ranked.slice(0, 5).map(r =>
+            `<li><strong>${esc(r.name)}</strong> <span class="enslaver-score">${r.score}</span>
+              <span class="field-hint">${esc((r.reasons && r.reasons[0]) || '')}</span></li>`
+          ).join('')}</ol>
+        </div>`
+      : '';
     const rows = plan.candidates.map((c, i)=>{
       const schedUrl = familySearchCollectionUrl({ surname: planSurname({name:c.name}), county: plan.county, state: plan.state }, '3161105');
       const statusOpts = Object.keys(CANDIDATE_STATUSES).map(k=>
         `<option value="${k}" ${c.status===k?'selected':''}>${CANDIDATE_STATUSES[k]}</option>`
       ).join('');
+      const eid = c.enslaverId || '';
+      const ent = eid && typeof getEnslaver === 'function' ? getEnslaver(eid) : null;
+      const shared = eid && typeof enslaverSharedLabel === 'function'
+        ? enslaverSharedLabel(eid, person.id)
+        : '';
+      const notesVal = ent ? (ent.notes || '') : (c.note || '');
       return `<div class="candidate-block status-${esc(c.status||'untested')}">
         <div class="candidate-row">
-          <div class="candidate-name">${esc(c.name)}</div>
+          <div class="candidate-name">${esc(c.name)} ${typeof trustBadge === 'function' ? trustBadge(c.status || 'untested') : ''}</div>
           <select onchange="setCandidateStatus(${i}, this.value)">${statusOpts}</select>
           <div class="plan-src-actions">
             <a class="btn btn-small" href="${esc(schedUrl)}" target="_blank" rel="noopener">1860 slave schedule</a>
@@ -310,6 +576,12 @@ function planStepActions(key, person, plan){
             <button class="btn btn-ghost btn-small" onclick="removeCandidate(${i})">✕</button>
           </div>
         </div>
+        ${shared ? `<div class="enslaver-shared">${esc(shared)}</div>` : ''}
+        <div class="enslaver-entity-fields">
+          <label class="field-hint">Entity notes (shared across relatives)
+            <textarea rows="2" class="case-notes" placeholder="Estate, newspapers, oral history…" onchange="setCandidateEnslaverNotes(${i}, this.value)">${esc(notesVal)}</textarea>
+          </label>
+        </div>
         ${strategyCard(c.name, plan.county, plan.state)}
       </div>`;
     }).join('');
@@ -317,7 +589,7 @@ function planStepActions(key, person, plan){
     const probateFsUrl = plan.state
       ? `https://www.familysearch.org/search/record/results?q.surname=${probateSurname}&q.residencePlace=${encodeURIComponent(plan.state)}&f.collectionId=`
       : `https://www.familysearch.org/en/wiki/United_States_Probate_Records`;
-    return `${hasEnslaverHint}
+    return `${hasEnslaverHint}${rankHtml}
     <div class="candidate-list">${rows || '<div class="field-hint">No candidates yet.</div>'}</div>
     <div class="candidate-add">
       <input type="text" id="candName" placeholder="Candidate enslaver name, e.g. Jasper Stowe" onkeydown="if(event.key==='Enter'){event.preventDefault();addCandidate();}">
@@ -361,15 +633,20 @@ function planStepActions(key, person, plan){
     const portOpts = '<option value="">— Unknown —</option>' + DISEMBARK_PORTS.map(c=>
       `<option value="${esc(c)}" ${c===a.disembarkationPort?'selected':''}>${esc(c)}</option>`
     ).join('');
-    const dnaSummary = d.company
-      ? `<div class="africa-dna-summary">
-          <strong>DNA on file:</strong> ${esc(d.company)}${d.testedYear?' ('+esc(d.testedYear)+')':''}
+    const dnaSummary = `<div class="africa-dna-summary">
+          ${d.company ? `<strong>DNA on file:</strong> ${esc(d.company)}${d.testedYear?' ('+esc(d.testedYear)+')':''}
           ${d.hypothesizedRegion?` · region: ${esc(d.hypothesizedRegion)}`:''}
           ${d.ethnicityNotes?`<div class="field-hint">${esc(d.ethnicityNotes)}</div>`:''}
-          <button type="button" class="btn btn-ghost btn-small" onclick="openPersonForm('${esc(person.id)}')">Edit DNA workspace</button>
-        </div>`
-      : `<div class="field-hint" style="margin-bottom:10px;">No DNA entered yet —
-          <button type="button" class="btn btn-ghost btn-small" onclick="openPersonForm('${esc(person.id)}')">Open DNA workspace on their card</button>
+          ${d.keyMatches?`<div class="field-hint" style="white-space:pre-wrap;">${esc(d.keyMatches)}</div>`:''}`
+            : `<span class="field-hint">No DNA entered yet.</span>`}
+          <div class="plan-actions" style="margin-top:8px;">
+            <button type="button" class="btn btn-ghost btn-small" onclick="openDnaWorkspace('${esc(person.id)}')">Open DNA workspace</button>
+            <label class="btn btn-ghost btn-small" style="cursor:pointer;">
+              Import matches CSV
+              <input type="file" accept=".csv,text/csv,text/plain" style="display:none" onchange="if(this.files[0])applyDnaCsvFile('${esc(person.id)}', this.files[0])">
+            </label>
+          </div>
+          <div class="field-hint">CSV columns: name, company, ethnicity notes (optional shared cM). Never auto-confirms a region.</div>
         </div>`;
 
     const synth = typeof synthesizeBridgeHtml === 'function' ? synthesizeBridgeHtml(person.id) : '';
@@ -460,6 +737,12 @@ function setPersonAfricaField(field, value){
   ensurePersonAfrica(person);
   if(field === 'africanBornMention') person.africa[field] = !!value;
   else person.africa[field] = typeof value === 'string' ? value.trim() : value;
+  if(field === 'regionConfidence' && typeof trustClampConfidence === 'function'){
+    // Allow documentary when the researcher chooses it; block bogus "confirmed"
+    if(String(person.africa.regionConfidence).toLowerCase() === 'confirmed'){
+      person.africa.regionConfidence = trustClampConfidence('confirmed');
+    }
+  }
   if(field === 'ethnonymId' && person.africa.ethnonymId && !person.africa.regionClaim){
     const eth = ethnonymById(person.africa.ethnonymId);
     if(eth) person.africa.regionClaim = eth.region;
@@ -594,13 +877,33 @@ function setPlanChecked(sourceId, checked){
 function addCandidate(){
   const plan = activePlan();
   const input = document.getElementById('candName');
-  if(!plan || !input) return;
+  if(!plan || !input || !activePlanPersonId) return;
   const name = input.value.trim();
   if(!name) return;
-  plan.candidates.push({ name, status: 'untested' });
+  if(typeof linkPlanCandidate === 'function'){
+    const res = linkPlanCandidate(activePlanPersonId, name, {});
+    if(res && !res.created){
+      showToast('Already a candidate');
+      return;
+    }
+  } else {
+    plan.candidates.push({ name, status: 'untested' });
+  }
   touchPlan();
   saveData();
   renderPlanView();
+}
+function setCandidateEnslaverNotes(i, notes){
+  const plan = activePlan();
+  if(!plan || !plan.candidates[i]) return;
+  const c = plan.candidates[i];
+  if(c.enslaverId && typeof setEnslaverNotes === 'function'){
+    setEnslaverNotes(c.enslaverId, notes);
+  } else {
+    c.note = String(notes || '');
+    touchPlan();
+    saveData();
+  }
 }
 function setCandidateStatus(i, status){
   const plan = activePlan();

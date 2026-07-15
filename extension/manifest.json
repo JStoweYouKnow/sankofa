@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Forebear Companion",
+  "version": "0.1.0",
+  "description": "User-driven capture of FamilySearch search results into Forebear. Never stores passwords; you confirm every import.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://www.familysearch.org/*",
+    "https://familysearch.org/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://*.vercel.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Forebear Companion",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.familysearch.org/*",
+        "https://familysearch.org/*"
+      ],
+      "js": ["parsers/familysearch.js", "content-fs.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "https://*.vercel.app/*"
+      ],
+      "js": ["content-forebear.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

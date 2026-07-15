@@ -906,6 +906,212 @@
   }
   .coach-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
 
+  .case-file{
+    margin:0 0 20px;
+    padding:16px 18px;
+    border:1px solid var(--line);
+    background:var(--card);
+    border-radius:2px;
+  }
+  .case-file-head{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:8px 16px;
+    margin-bottom:14px;
+  }
+  .case-file-title{
+    font-family:'Fraunces',serif;
+    font-size:18px;
+    font-weight:600;
+  }
+  .case-coverage{
+    font-size:11.5px;
+    color:var(--ink-faint);
+    letter-spacing:0.02em;
+  }
+  .case-section{margin-bottom:14px;}
+  .case-section:last-child{margin-bottom:0;}
+  .case-section-label{
+    font-size:10.5px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--ink-faint);
+    margin-bottom:6px;
+  }
+  .case-known-list,.case-q-list,.case-h-list{
+    margin:0;
+    padding:0;
+    list-style:none;
+  }
+  .case-known-list li{
+    font-size:13.5px;
+    line-height:1.45;
+    padding:2px 0;
+  }
+  .case-q-list li,.case-h-list li{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-start;
+    gap:8px;
+    padding:6px 0;
+    border-top:1px solid var(--line);
+    font-size:13px;
+    line-height:1.45;
+  }
+  .case-q-list li:first-child,.case-h-list li:first-child{border-top:none;padding-top:0;}
+  .case-q-list li span{flex:1;min-width:12ch;}
+  .case-h-text{flex:1;min-width:12ch;}
+  .case-h-status{
+    font-size:12px;
+    max-width:9.5rem;
+    padding:3px 6px;
+  }
+  .case-trust{
+    flex:0 0 auto;
+    font-size:10px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    padding:2px 6px;
+    border:1px solid var(--line);
+    color:var(--ink-soft);
+  }
+  .case-trust-lead{border-color:rgba(166,124,58,0.45);color:var(--ochre, var(--brass));}
+  .case-trust-hypothesis{border-color:rgba(44,58,85,0.35);color:var(--indigo);}
+  .case-trust-confirmed{border-color:rgba(45,106,79,0.45);color:var(--green);}
+  .case-trust-ruled_out{opacity:0.65;text-decoration:line-through;}
+  /* Shared trust badges (Phase G) — same vocabulary everywhere */
+  .trust-badge{
+    display:inline-block;
+    flex:0 0 auto;
+    font-family:'Courier Prime',monospace;
+    font-size:10px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    padding:2px 7px;
+    border:1px solid var(--line);
+    border-radius:2px;
+    color:var(--ink-soft);
+    white-space:nowrap;
+    vertical-align:middle;
+  }
+  .trust-lead{border-color:rgba(166,124,58,0.45);color:var(--ochre, var(--brass));background:rgba(212,148,58,0.08);}
+  .trust-hypothesis{border-color:rgba(44,58,85,0.35);color:var(--indigo);background:rgba(44,58,85,0.06);}
+  .trust-confirmed{border-color:rgba(45,106,79,0.45);color:var(--green);background:rgba(75,99,80,0.08);}
+  .trust-ruled_out{opacity:0.65;text-decoration:line-through;}
+  .coach-top .trust-badge,.hit-interpret .trust-badge,.agent-step-top .trust-badge,
+  .candidate-name .trust-badge,.synth-hyp-head .trust-badge{margin-left:6px;}
+  .agent-step-top{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+  .case-empty{
+    margin:0;
+    font-size:13px;
+    color:var(--ink-faint);
+    line-height:1.5;
+  }
+  .case-add-row{
+    display:flex;
+    gap:8px;
+    margin-top:8px;
+  }
+  .case-add-row input{flex:1;min-width:0;}
+  .case-notes{
+    width:100%;
+    font:inherit;
+    font-size:13px;
+    line-height:1.5;
+    padding:8px 10px;
+    border:1px solid var(--line);
+    background:var(--card-raised);
+    color:var(--ink);
+    resize:vertical;
+  }
+
+  .enslaver-rank{
+    margin:0 0 14px;
+    padding:12px 14px;
+    border:1px solid var(--line);
+    background:var(--card-raised);
+  }
+  .enslaver-rank-list{
+    margin:6px 0 0;
+    padding-left:1.25rem;
+    font-size:13px;
+    line-height:1.45;
+  }
+  .enslaver-rank-list li{margin-bottom:6px;}
+  .enslaver-score{
+    font-family:'Courier Prime',monospace;
+    font-size:11px;
+    color:var(--ink-faint);
+    margin-left:6px;
+  }
+  .enslaver-shared{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin:4px 0 8px;
+  }
+  .enslaver-entity-fields{margin:0 0 10px;}
+  .enslaver-entity-fields .field-hint{display:block;}
+
+  .companion-review{
+    padding:12px 14px;
+    border:1px solid var(--line);
+    background:var(--card-raised);
+  }
+  .companion-hit-list{
+    margin:8px 0 12px;
+    padding-left:1.2rem;
+    font-size:13px;
+    line-height:1.45;
+  }
+  .companion-hit-list li{margin-bottom:4px;}
+  .companion-field .key-status{margin-top:6px;}
+
+  .agent-queue{
+    margin:0 0 18px;
+    padding:14px 16px;
+    border:1px solid var(--line);
+    background:var(--card-raised);
+  }
+  .agent-step{
+    padding:10px 0;
+    border-top:1px solid var(--line);
+  }
+  .agent-step:first-of-type{border-top:none;padding-top:0;}
+  .agent-step-top{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    gap:8px 12px;
+    margin-bottom:4px;
+  }
+  .agent-kind{
+    font-size:10px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--ink-faint);
+    border:1px solid var(--line);
+    padding:1px 6px;
+  }
+  .agent-status{
+    font-size:11px;
+    color:var(--ink-faint);
+    margin-left:auto;
+  }
+  .agent-step.status-done{opacity:0.55;}
+  .agent-step.status-error .agent-status{color:#9a3412;}
+  .agent-step-actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:8px;
+  }
+
   /* ---------- Research plan ---------- */
   .plan-picker{max-width:360px;margin-bottom:18px;}
   /* Plan next-step banner: pull-quote presence (fallback if coach.js not loaded) */
@@ -1148,6 +1354,14 @@
     margin-bottom:6px;
   }
   .hit-interpret .btn{margin-top:2px;}
+  .hit-interpret-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+  .hit-excerpt-chip{
+    display:inline-block;
+    font-family:'Courier Prime',monospace;
+    font-size:10px;letter-spacing:0.4px;
+    color:var(--ink-faint);margin:0 0 4px 8px;
+  }
+  .excerpt-modal textarea{width:100%;min-height:160px;}
   .lens-enslaver{border-left:3px solid var(--brass);background:rgba(212,148,58,0.06);}
   .lens-freed{border-left:3px solid var(--green);background:rgba(75,99,80,0.06);}
   .lens-bureau{border-left:3px solid var(--indigo);background:rgba(44,58,85,0.07);}

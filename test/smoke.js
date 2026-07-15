@@ -6,12 +6,22 @@ const ROOT = path.join(__dirname, '..');
 const src = fs.readFileSync(path.join(ROOT, 'js', 'sources.js'), 'utf8')
   + '\n;' + fs.readFileSync(path.join(ROOT, 'js/africa.js'), 'utf8')
   + '\n;' + fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8')
+  + '\n;' + fs.readFileSync(path.join(ROOT, 'js/trust.js'), 'utf8')
   + '\n;' + fs.readFileSync(path.join(ROOT, 'js/plan.js'), 'utf8')
+  + '\n;' + fs.readFileSync(path.join(ROOT, 'js/gedcom.js'), 'utf8')
+  + '\n;' + fs.readFileSync(path.join(ROOT, 'js/enslaver.js'), 'utf8')
+  + '\n;' + fs.readFileSync(path.join(ROOT, 'js/coach.js'), 'utf8')
+  + '\n;' + fs.readFileSync(path.join(ROOT, 'js/interpret.js'), 'utf8')
+  + '\n;' + fs.readFileSync(path.join(ROOT, 'js/synthesize.js'), 'utf8')
+  + '\n;' + fs.readFileSync(path.join(ROOT, 'js/companion.js'), 'utf8')
+  + '\n;' + fs.readFileSync(path.join(ROOT, 'js/agent.js'), 'utf8')
   + '\n;' + fs.readFileSync(path.join(ROOT, 'js/sync.js'), 'utf8')
   + '\n;' + fs.readFileSync(path.join(ROOT, 'js/sample.js'), 'utf8');
 const SI_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'si-search.json'), 'utf8');
 const LOC_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'loc-search.json'), 'utf8');
 const IA_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'ia-search.json'), 'utf8');
+const GED_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'sample-import.ged'), 'utf8');
+const DNA_CSV_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'dna-matches.csv'), 'utf8');
 
 // ---- stubs ----
 const store = new Map();
@@ -52,9 +62,13 @@ global.document = {
   createElementNS(){ return makeEl(); },
   body: { appendChild(){} },
   documentElement: null,
+  addEventListener(){},
 };
 global.document.documentElement = makeEl();
-global.window = { addEventListener(ev, fn){ if(ev==='DOMContentLoaded') global.__initFn = fn; } };
+global.window = {
+  addEventListener(ev, fn){ if(ev==='DOMContentLoaded') global.__initFn = fn; },
+  postMessage(){}
+};
 global.requestAnimationFrame = fn => {};
 global.CSS = { escape: s => s };
 global.confirm = () => true;
@@ -94,7 +108,25 @@ eval(src + `
   renderDiscoveryPlaceholder, updateDiscoveryBadge, sessionCounts, sessionPersonId,
   selectPlanPerson, renderPlanView,
   earliestEra, runDiscovery, addSurnameAsCandidate,
+  ensureCase, ensurePlan, caseCoverageSummary, caseOpenHypothesis, emptyCase,
+  coachForPerson,
+  linkPlanCandidate, getEnslaver, peopleLinkedToEnslaver, rankEnslaverCandidates,
+  findOrCreateEnslaver,
+  companionValidateMessage, companionNormalizeHit, companionConfirmImport,
+  agentNextSources, agentRunNext, agentResolveStep, agentEnsureSession, agentOnCompanionImport,
+  markSourceOpened,
+  interpretHit, normalizeExcerpt, setHitExcerpt, hydrateHitExcerpt, interpretHasExcerpt,
+  gedcomToPeople, applyGedcomImport, parseGedcom, gedParseDisplayName,
+  trustBadge, trustNormalize, trustClampUpgrade, trustClampConfidence, trustFromLens,
+  llmMergeCoachEnhance, agentQueueHtml,
+  parseDnaMatchCsv, importDnaMatchesCsv, formatDnaMatchRows,
+  synthesizeBridge, synthReadiness, synthAfricaAgentReady,
+  get AGENT(){ return AGENT },
+  get COMPANION(){ return COMPANION },
   get QUICKLINK_CACHE(){ return QUICKLINK_CACHE },
+  get EXCERPT_MAX_CHARS(){ return EXCERPT_MAX_CHARS },
+  get PENDING_GEDCOM(){ return PENDING_GEDCOM },
+  set PENDING_GEDCOM(v){ PENDING_GEDCOM = v; },
   setDiscoveryCtx(v){ LAST_DISCOVERY_CTX = v; },
   setKey(v){ API_KEYS.smithsonian = v; },
   setPendingImport(v){ pendingImport = v; },
@@ -470,6 +502,398 @@ setTimeout(async () => {
   assert(T.STATE.plans['pT'].candidates.some(c=>c.name === 'Stowe'), 'surname added as enslaver candidate on the plan');
   T.addSurnameAsCandidate();
   assert(T.STATE.plans['pT'].candidates.filter(c=>c.name==='Stowe').length === 1, 'candidate add is deduped');
+
+  // ---- Phase A: case file (schema v6) + coach from case ----
+  assert(T.SCHEMA_VERSION === 7, 'schema version is 7');
+  const v5Payload = {
+    schemaVersion: 5,
+    people: [{ id:'pCase', name:'Chaney Freeman', birthYear:'1840', parentIds:[], spouses:[], nameVariants:[], updatedAt:1 }],
+    logs: [],
+    plans: {
+      pCase: {
+        updatedAt: 1, state: 'North Carolina', county: 'Gaston', fieldOffice: '',
+        steps: {
+          anchor:{done:true,note:'',checked:{}},
+          county:{done:true,note:'',checked:{}},
+          records:{done:true,note:'',checked:{}},
+          enslaver:{done:false,note:'',checked:{}},
+          confirm:{done:false,note:'',checked:{}},
+          africa:{done:false,note:'',checked:{}}
+        },
+        candidates: [{ name: 'Rhyne', status: 'untested' }]
+      }
+    },
+    tombstones: [],
+    sessions: {}
+  };
+  const migrated = T.migrate(v5Payload);
+  assert(migrated.schemaVersion === 7, 'v5 payload migrates to v7');
+  assert(migrated.plans.pCase.case && Array.isArray(migrated.plans.pCase.case.hypotheses), 'migrate seeds empty case on plan');
+  const orphanCase = T.ensureCase('pMissingNobody');
+  assert(orphanCase && Array.isArray(orphanCase.openQuestions), 'ensureCase works for person with no prior plan');
+  if(!T.STATE.people.find(p=>p.id==='pCase')){
+    T.STATE.people.push({
+      id:'pCase', name:'Chaney Freeman', birthYear:'1840', parentIds:[],
+      spouses:[], nameVariants:[], updatedAt:1, dna:{}, africa:{}
+    });
+  }
+  T.STATE.plans.pCase = migrated.plans.pCase;
+  const kase = T.ensureCase('pCase');
+  assert(kase.hypotheses.some(h => (h.enslaverName || '').toLowerCase() === 'rhyne'), 'ensureCase seeds hypothesis from candidates');
+  assert(kase.openQuestions.length >= 1, 'ensureCase seeds a starter open question');
+  const cov = T.caseCoverageSummary('pCase');
+  assert(cov.total === 0, 'coverage summary empty without sessions');
+  T.selectPlanPerson('pCase');
+  assert(document.getElementById('planContent').innerHTML.includes('Case file'), 'plan view renders case file panel');
+  assert(document.getElementById('planContent').innerHTML.includes('held or employed') || document.getElementById('planContent').innerHTML.includes('Rhyne'), 'case shows candidate-derived hypothesis');
+  const coach = T.coachForPerson('pCase');
+  assert(coach.chip.includes('Case') || /rhyne/i.test(coach.headline + coach.why), 'coach prioritizes case lead');
+  assert(coach.primary && coach.primary.kind, 'coach still returns an action kind');
+  const emptyCoach = T.coachForPerson('');
+  assert(emptyCoach.secondary && emptyCoach.secondary.kind === 'story', 'empty tree coach keeps story secondary');
+  const payload = T.currentPayload();
+  assert(payload.plans.pCase && payload.plans.pCase.case, 'backup payload includes case on plan');
+
+  // ---- Phase B: enslaver graph ----
+  assert(T.SCHEMA_VERSION === 7, 'schema version is 7');
+  const sib = {
+    id:'pSib', name:'Silas Freeman', birthYear:'1838', parentIds:[],
+    spouses:[], nameVariants:[], updatedAt:1, dna:{}, africa:{}
+  };
+  if(!T.STATE.people.find(p=>p.id==='pSib')) T.STATE.people.push(sib);
+  const linkA = T.linkPlanCandidate('pCase', 'Jasper Rhyne', { note: 'oral' });
+  assert(linkA && linkA.enslaver && linkA.enslaver.id, 'linkPlanCandidate creates enslaver entity');
+  const linkB = T.linkPlanCandidate('pSib', 'Jasper Rhyne', {});
+  assert(linkB && linkB.enslaver.id === linkA.enslaver.id, 'two people share the same enslaver id');
+  assert(T.peopleLinkedToEnslaver(linkA.enslaver.id).length >= 2, 'peopleLinkedToEnslaver lists both');
+  // Mark found on a session for pCase searching Rhyne-ish — use surname Rhyne
+  const skey = T.sessionKey({ surname:'Rhyne', state:'North Carolina', county:'Gaston' });
+  T.STATE.sessions[skey] = {
+    key: skey, surname:'Rhyne', givenName:'', state:'North Carolina', county:'Gaston',
+    variants:[], personId:'pCase', createdAt:1, updatedAt:1,
+    checks: { 'chronicling-america': { status:'found', at:1 } }
+  };
+  T.STATE.plans.pSib = T.ensurePlan('pSib');
+  T.STATE.plans.pSib.candidates.forEach(c=>{
+    if((c.name||'').toLowerCase().includes('rhyne')) c.status = 'ruled-out';
+  });
+  const ranked = T.rankEnslaverCandidates('pCase', { surname:'Freeman', state:'North Carolina', county:'Gaston' }, []);
+  assert(ranked.length >= 1, 'rankEnslaverCandidates returns rows');
+  const rhyneRank = ranked.find(r => /rhyne/i.test(r.name));
+  assert(rhyneRank, 'Rhyne appears in ranking');
+  assert(rhyneRank.reasons.some(x => /find|Discovery|relative|plan/i.test(x)), 'ranking cites graph or discovery evidence');
+  // Ruled-out on sibling should still appear but not dominate over found boosts — score exists
+  assert(typeof rhyneRank.score === 'number' && rhyneRank.score >= 8, 'ranked score is usable');
+  const v6mig = T.migrate({
+    schemaVersion: 6,
+    people: [{ id:'pM', name:'Test', parentIds:[], spouses:[], nameVariants:[], updatedAt:1 }],
+    logs: [],
+    plans: {
+      pM: {
+        updatedAt:1, state:'North Carolina', county:'Gaston', fieldOffice:'',
+        steps: {}, candidates: [{ name:'Stowe', status:'untested' }],
+        case: { openQuestions:[], hypotheses:[], notes:'', updatedAt:1 }
+      }
+    },
+    tombstones: [],
+    sessions: {},
+    enslavers: {}
+  });
+  assert(v6mig.schemaVersion === 7, 'v6 migrates to v7');
+  assert(v6mig.plans.pM.candidates[0].enslaverId, 'migrate attaches enslaverId to candidates');
+  assert(v6mig.enslavers[v6mig.plans.pM.candidates[0].enslaverId], 'migrate creates enslaver record');
+  T.selectPlanPerson('pCase');
+  assert(document.getElementById('planContent').innerHTML.includes('Ranked across your tree') || document.getElementById('planContent').innerHTML.includes('Also on'), 'plan enslaver step shows graph UI');
+
+  // ---- Phase C: companion message schema + FS parser fixture ----
+  eval(fs.readFileSync(path.join(ROOT, 'extension/parsers/familysearch.js'), 'utf8'));
+  assert(typeof companionValidateMessage === 'function', 'companionValidateMessage exported');
+  assert(companionValidateMessage({ source:'forebear-companion', v:1, type:'pong' }), 'valid pong message');
+  assert(!companionValidateMessage({ source:'forebear-companion', v:1, type:'nope' }), 'rejects unknown type');
+  assert(!companionValidateMessage({ source:'forebear-companion', v:1, type:'hits', hits:'x' }), 'rejects non-array hits');
+  const fixtureHtml = fs.readFileSync(path.join(ROOT, 'test/fixtures/familysearch-results.html'), 'utf8');
+  function fakeDocFromFixture(html){
+    const links = [];
+    const re = /<a\s+href="([^"]*ark:\/[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let m;
+    while((m = re.exec(html))){
+      links.push({ href: m[1], text: m[2].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim() });
+    }
+    const items = links.filter(l => /ark:\//.test(l.href)).map(l => {
+      const a = {
+        tagName: 'A',
+        href: l.href.startsWith('http') ? l.href : ('https://www.familysearch.org' + l.href),
+        getAttribute(n){ return n === 'href' ? l.href : null; },
+        textContent: l.text
+      };
+      return {
+        tagName: 'LI',
+        textContent: l.text + ' 1860',
+        querySelector(sel){ return sel.includes('ark') ? a : null; }
+      };
+    });
+    return {
+      querySelectorAll(sel){
+        if(sel.includes('search-result') || sel.includes('result')) return items;
+        if(sel.includes('ark:')) return items.map(i => i.querySelector('a[href*="/ark:/"]'));
+        return [];
+      }
+    };
+  }
+  const parsedHits = parseFamilySearchResults(fakeDocFromFixture(fixtureHtml), 'https://www.familysearch.org/search/record/results');
+  assert(parsedHits.length >= 2, 'FS fixture yields ark hits');
+  assert(parsedHits.every(h => h.url && h.label && h.source === 'companion'), 'FS hits have url/label/source');
+  assert(parsedHits.some(h => /Rhyne/i.test(h.label)), 'FS fixture includes Rhyne label');
+  const emptyHits = parseFamilySearchResults({ querySelectorAll(){ return []; } }, 'https://www.familysearch.org/');
+  assert(Array.isArray(emptyHits) && emptyHits.length === 0, 'unexpected DOM returns empty hits');
+
+  COMPANION.pendingHits = parsedHits.slice(0, 2).map(companionNormalizeHit);
+  const beforeCache = T.RESULT_CACHE.length;
+  companionConfirmImport();
+  assert(T.RESULT_CACHE.length >= beforeCache + 2, 'confirm import caches companion hits');
+  assert(document.getElementById('statusCompanion'), 'companion status element exists in keys panel');
+
+  // ---- Phase D: agent runner queue + resolve ----
+  global.window.open = () => null;
+  assert(typeof agentNextSources === 'function' && typeof agentRunNext === 'function', 'agent runner loaded');
+  assert(agentNextSources('').length === 0, 'no person → empty queue');
+  T.STATE.plans.pCase.steps.records.done = false;
+  T.STATE.plans.pCase.state = 'North Carolina';
+  T.STATE.plans.pCase.county = 'Gaston';
+  const queued = agentNextSources('pCase', 3);
+  assert(queued.length >= 1 && queued.length <= 3, 'agent queues up to N checklist/live steps');
+  assert(queued.every(s => s.kind && s.label && s.status), 'queue steps have kind/label/status');
+  global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(LOC_FIXTURE)) });
+  AGENT.personId = 'pCase';
+  AGENT.steps = queued.map(s => Object.assign({}, s));
+  AGENT.steps[0].kind = 'link';
+  AGENT.steps[0].status = 'needs-review';
+  AGENT.steps[0].sourceId = AGENT.steps[0].sourceId || 'freedmans-bank';
+  agentEnsureSession('pCase');
+  const qcache = T.QUICKLINK_CACHE;
+  if(!qcache[AGENT.steps[0].sourceId]){
+    qcache[AGENT.steps[0].sourceId] = {
+      id: AGENT.steps[0].sourceId,
+      label: AGENT.steps[0].label,
+      url: AGENT.steps[0].url || 'https://example.com',
+      type: 'Other'
+    };
+  }
+  const logsBefore = T.STATE.logs.length;
+  markSourceOpened(AGENT.steps[0].sourceId);
+  agentResolveStep(0, 'nothing');
+  assert(AGENT.steps[0].status === 'done', 'resolve marks step done');
+  assert(T.STATE.logs.length >= logsBefore + 1, 'dead-end resolve writes a log');
+  const kaseAfter = T.ensureCase('pCase');
+  assert((kaseAfter.timeline || []).some(t => t.kind === 'agent-dead-end'), 'case timeline records dead-end');
+  AGENT.steps.push({
+    id: 'familysearch-all', sourceId: 'familysearch-all', kind: 'companion',
+    label: 'FamilySearch', url: 'https://www.familysearch.org/', status: 'awaiting-capture', note: ''
+  });
+  agentOnCompanionImport(2);
+  assert(AGENT.steps[AGENT.steps.length - 1].status === 'needs-review', 'companion import advances awaiting step');
+  AGENT.steps.push({
+    id: 'x', sourceId: 'last-seen', kind: 'link', label: 'Jasper Rhyne notice',
+    url: 'https://example.com', status: 'needs-review', note: ''
+  });
+  const ei = AGENT.steps.length - 1;
+  qcache['last-seen'] = { id:'last-seen', label:'Last Seen', url:'https://example.com', type:'Other' };
+  agentResolveStep(ei, 'enslaver');
+  assert(AGENT.steps[ei].status === 'done', 'enslaver resolve completes step');
+  assert(Object.keys(T.STATE.enslavers || {}).length >= 1, 'enslaver lead creates/links entity');
+
+  // ---- Phase E: excerpt / page text interpret ----
+  const titleHit = {
+    label: 'County court minutes',
+    note: '1860 — Gaston',
+    year: 1860,
+    url: 'https://example.com/court-minutes',
+    source: 'Chronicling America',
+    type: 'Newspaper / Advertisement'
+  };
+  const ctxE = { surname: 'Freeman' };
+  const titleOnly = T.interpretHit(titleHit, ctxE);
+  assert(titleOnly.lens === 'enslaver-lead', 'pre-1865 title → enslaver-lead without excerpt');
+  assert(!titleOnly.excerptBased, 'no excerpt → not excerpt-based');
+  const emptyExcerpt = T.interpretHit(Object.assign({}, titleHit, { excerpt: '' }), ctxE);
+  assert(emptyExcerpt.lens === titleOnly.lens && emptyExcerpt.why === titleOnly.why, 'empty excerpt → same as title-only');
+  const withExcerpt = T.interpretHit(Object.assign({}, titleHit, {
+    excerpt: 'one negro man named Tom belonging to Jasper Rhyne of Gaston County'
+  }), ctxE);
+  assert(withExcerpt.excerptBased, 'excerpt flags excerptBased');
+  assert(withExcerpt.lens === 'enslaver-lead', 'belonging-to excerpt → enslaver-lead');
+  assert(/Jasper Rhyne|Rhyne/i.test(withExcerpt.candidateName), 'excerpt names enslaver as candidate');
+  assert(/OCR may err/i.test(withExcerpt.why), 'why labels OCR uncertainty');
+  const titleWhyScore = (titleOnly.candidateName || '').toLowerCase() === 'freeman';
+  const excerptBetter = /rhyne/i.test(withExcerpt.candidateName);
+  assert(excerptBetter && titleWhyScore, 'excerpt raises named enslaver vs surname-only title lead');
+  const long = 'x'.repeat(T.EXCERPT_MAX_CHARS + 500);
+  const norm = T.normalizeExcerpt(long);
+  assert(norm.truncated && norm.text.length === T.EXCERPT_MAX_CHARS, 'long text truncated at max');
+  T.setDiscoveryCtx({ surname: 'Freeman', givenName: 'Hattie', state: 'North Carolina', county: 'Gaston' });
+  T.getOrCreateSession({ surname: 'Freeman', state: 'North Carolina', county: 'Gaston' }, 'pCase');
+  const beforeLen = T.RESULT_CACHE.length;
+  T.RESULT_CACHE.push({
+    label: 'Sale notice',
+    url: 'https://example.com/sale-notice',
+    source: 'Chronicling America',
+    year: 1855,
+    note: '1855'
+  });
+  const eIdx = beforeLen;
+  const saved = T.setHitExcerpt(eIdx, 'his servant belonging to John Stowe');
+  assert(saved && T.RESULT_CACHE[eIdx].excerpt.indexOf('John Stowe') >= 0, 'setHitExcerpt stores text on hit');
+  const sess = T.activeSession();
+  assert(sess.excerpts && sess.excerpts['https://example.com/sale-notice'], 'excerpt persisted on session by url');
+  const afterPaste = T.interpretHit(T.RESULT_CACHE[eIdx], { surname: 'Freeman' });
+  assert(afterPaste.excerptBased && /Stowe/i.test(afterPaste.candidateName || afterPaste.why), 'paste updates insight why / candidate');
+  const huge = T.setHitExcerpt(eIdx, 'y'.repeat(T.EXCERPT_MAX_CHARS + 100));
+  assert(huge.truncated && T.RESULT_CACHE[eIdx].excerptTruncated, 'oversized paste marked truncated');
+  const fromCompanion = T.companionNormalizeHit({
+    label: 'FS result',
+    url: 'https://www.familysearch.org/ark:/61903/1:1:TEST',
+    pageText: 'belonging to William Rhyne'
+  });
+  assert(fromCompanion && fromCompanion.excerpt && /William Rhyne/i.test(fromCompanion.excerpt), 'companion pageText → excerpt');
+  assert(document.getElementById('excerptOverlay') && document.getElementById('excerptText'), 'excerpt modal exists');
+
+  // ---- Phase F: GEDCOM import ----
+  assert(typeof T.gedcomToPeople === 'function' && typeof T.applyGedcomImport === 'function', 'gedcom import loaded');
+  assert(T.gedParseDisplayName('Hattie /Freeman/') === 'Hattie Freeman', 'NAME slash form → display name');
+  const parsedGed = T.gedcomToPeople(GED_FIXTURE);
+  assert(parsedGed.people.length === 5, 'sample GEDCOM → 5 people (got ' + parsedGed.people.length + ')');
+  assert(parsedGed.warnings === 0, 'clean fixture has no warnings');
+  const hattie = parsedGed.people.find(p => p.name === 'Hattie Freeman');
+  assert(hattie && hattie.birthYear === 'c. 1867', 'ABT date → c. year');
+  assert(hattie.birthplace.indexOf('Gaston') >= 0, 'BIRT PLAC imported');
+  assert(hattie.parentIds.length === 2, 'child parentIds set from FAM');
+  const silas = parsedGed.people.find(p => p.name === 'Silas Freeman');
+  assert(silas && silas.enslaverSurname === 'Rhyne', 'enslaver surname from NOTE');
+  const chaney = parsedGed.people.find(p => p.name === 'Chaney Freeman');
+  assert(chaney && (chaney.nameVariants || []).some(v => /Stowe/i.test(v)), 'second NAME → variant');
+  assert(silas.spouses.some(s => s.personId === chaney.id), 'FAM HUSB/WIFE → spouses');
+  const beforePeople = T.STATE.people.length;
+  T.PENDING_GEDCOM = parsedGed;
+  const applied = T.applyGedcomImport();
+  assert(applied.added === 5, 'apply adds 5 people');
+  assert(T.STATE.people.length === beforePeople + 5, 'STATE grew by 5');
+  const imported = T.STATE.people.filter(p => p.name === 'Hattie Freeman' && p.id !== 'pA');
+  assert(imported.length >= 1, 'imported Hattie present with new id');
+  const impId = imported[imported.length - 1].id;
+  assert(T.STATE.plans[impId] && T.STATE.plans[impId].case, 'empty plan+case created');
+  const coachImp = T.coachForPerson(impId);
+  assert(coachImp && coachImp.primary && coachImp.primary.kind, 'coachForPerson works on imported person');
+  const bad = T.parseGedcom('0 HEAD\nnot a line\n0 TRLR');
+  assert(bad.warnings >= 1, 'malformed line increments warning count');
+  assert(document.getElementById('gedcomOverlay') && document.getElementById('gedcomFile'), 'gedcom UI elements exist');
+
+  // ---- Phase G: trust labels ----
+  assert(typeof T.trustBadge === 'function' && typeof T.trustNormalize === 'function', 'trust helpers loaded');
+  assert(T.trustNormalize('untested') === 'lead', 'untested → lead');
+  assert(T.trustNormalize('promising') === 'hypothesis', 'promising → hypothesis');
+  assert(T.trustNormalize('ruled-out') === 'ruled_out', 'ruled-out → ruled_out');
+  assert(T.trustClampUpgrade('confirmed', 'lead') === 'lead', 'cannot upgrade lead → confirmed');
+  assert(T.trustClampUpgrade('confirmed', 'confirmed') === 'confirmed', 'confirmed stays confirmed');
+  assert(T.trustClampConfidence('documentary') === 'speculative', 'AI confidence clamp blocks documentary');
+  assert(T.trustFromLens('enslaver-lead') === 'lead', 'enslaver lens → lead trust');
+  const badgeHtml = T.trustBadge('lead');
+  assert(/trust-badge/.test(badgeHtml) && /data-trust="lead"/.test(badgeHtml), 'trustBadge emits chip markup');
+  const coachT = T.coachForPerson('pCase');
+  assert(coachT.trust === 'lead' || coachT.trust === 'hypothesis', 'coach attaches trust class');
+  const coachMerged = T.llmMergeCoachEnhance(coachT, {
+    headline: 'Polished headline',
+    why: 'Polished why',
+    trust: 'confirmed',
+    primary: { label: 'Hacked', kind: 'add-person' }
+  });
+  assert(coachMerged.headline === 'Polished headline', 'enhance updates headline');
+  assert(coachMerged.primary.kind === coachT.primary.kind, 'enhance leaves primary.kind stable');
+  assert(coachMerged.trust === coachT.trust, 'enhance leaves trust class stable');
+  assert(coachMerged.key === coachT.key, 'enhance leaves coach key stable');
+  AGENT.personId = 'pCase';
+  AGENT.steps = [{
+    id: 'x', sourceId: 'freedmans-bank', kind: 'link', label: 'Freedman\'s Bank',
+    url: 'https://example.com', status: 'needs-review', note: ''
+  }];
+  const qHtml = T.agentQueueHtml();
+  assert(/trust-badge/.test(qHtml) && /data-trust="lead"/.test(qHtml), 'agent review cards show lead badges');
+  const interpT = T.interpretHit({
+    label: 'Sale notice', year: 1855, source: 'Chronicling America',
+    excerpt: 'belonging to Jasper Rhyne'
+  }, { surname: 'Freeman' });
+  assert(interpT.trust === 'lead', 'interpret hit trust is lead not confirmed');
+  T.selectPlanPerson('pCase');
+  assert(document.getElementById('planContent').innerHTML.indexOf('trust-badge') >= 0
+    || document.getElementById('planContent').innerHTML.indexOf('trust-lead') >= 0
+    || document.getElementById('planContent').innerHTML.indexOf('Case file') >= 0,
+    'plan view can render trust vocabulary');
+
+  // ---- Phase H: DNA CSV + case-gated Africa agent ----
+  assert(typeof T.parseDnaMatchCsv === 'function' && typeof T.importDnaMatchesCsv === 'function', 'DNA CSV helpers loaded');
+  const dnaParsed = T.parseDnaMatchCsv(DNA_CSV_FIXTURE);
+  assert(dnaParsed.rows.length === 3, 'DNA fixture yields 3 matches');
+  assert(dnaParsed.rows[0].name.indexOf('Okonkwo') >= 0, 'match name parsed');
+  let emptyErr = '';
+  try{ T.importDnaMatchesCsv('pCase', '   '); }catch(e){ emptyErr = e.message || ''; }
+  assert(/No match|empty|rows/i.test(emptyErr), 'empty CSV throws');
+  const pDna = T.STATE.people.find(p => p.id === 'pCase') || T.STATE.people[0];
+  const dnaId = pDna.id;
+  if(typeof ensurePersonAfrica === 'function') ensurePersonAfrica(pDna);
+  else { pDna.dna = pDna.dna || {}; pDna.africa = pDna.africa || {}; }
+  pDna.dna.keyMatches = '';
+  pDna.dna.company = '';
+  pDna.africa.regionConfidence = 'speculative';
+  const impDna = T.importDnaMatchesCsv(dnaId, DNA_CSV_FIXTURE);
+  assert(impDna.count === 3, 'import reports 3 matches');
+  assert(/Okonkwo/.test(pDna.dna.keyMatches) && /Diallo/.test(pDna.dna.keyMatches), 'CSV fills keyMatches');
+  assert(pDna.africa.regionConfidence !== 'confirmed' && pDna.africa.regionConfidence !== 'documentary',
+    'CSV import never sets regionConfidence to confirmed/documentary');
+
+  // Paper trail not ready
+  T.STATE.logs = T.STATE.logs.filter(l => l.personId !== dnaId || l.status !== 'confirmed');
+  T.STATE.plans[dnaId].steps.confirm.done = false;
+  T.STATE.plans[dnaId].steps.anchor.done = false;
+  const early = T.synthReadiness(dnaId);
+  assert(!early.ready, 'synth readiness false without confirm/anchor trail');
+
+  // On Africa step with paper ready but no case foothold → coach blocks ethnonym leap
+  Object.keys(T.STATE.plans[dnaId].steps).forEach(k => {
+    T.STATE.plans[dnaId].steps[k].done = (k !== 'africa');
+  });
+  T.STATE.logs.push({
+    id: 'lDnaGate', personId: dnaId, status: 'confirmed', type: 'Other',
+    sourceName: 'Cohabitation bond', supports: ['name'], findings: 'named',
+    updatedAt: Date.now()
+  });
+  T.STATE.plans[dnaId].candidates = [];
+  T.STATE.plans[dnaId].case = { openQuestions: [], hypotheses: [], notes: '', timeline: [], updatedAt: 1 };
+  T.STATE.sessions = {};
+  const paperOk = T.synthReadiness(dnaId);
+  assert(paperOk.ready, 'confirmed named log → paper ready');
+  const africaGate = T.synthAfricaAgentReady(dnaId);
+  assert(!africaGate.ready, 'no case foothold → Africa agent gated');
+  const coachAfrica = T.coachForPerson(dnaId);
+  assert(coachAfrica.key === 'africa', 'coach lands on africa step');
+  assert(coachAfrica.primary.kind === 'open-plan' || coachAfrica.primary.kind === 'edit-person-dna',
+    'coach primary is plan foothold or DNA — not Bridge leap');
+  assert(/foothold|DNA|enslaver|Confirm|Africa/i.test(coachAfrica.headline + ' ' + coachAfrica.why),
+    'coach messaging blocks Africa ethnonym leap');
+  const synthGate = T.synthesizeBridge(dnaId);
+  assert(synthGate.africaAgentReady === false, 'synthesizeBridge exposes africaAgentReady false');
+  assert(synthGate.dnaQuestions.length >= 1, 'DNA questions still proposed when gated');
+
+  // Case foothold unlocks agent
+  T.STATE.plans[dnaId].candidates = [{ name: 'Rhyne', status: 'untested' }];
+  T.ensureCase(dnaId);
+  const africaOpen = T.synthAfricaAgentReady(dnaId);
+  assert(africaOpen.ready, 'candidate on plan unlocks Africa agent');
+
+  pDna.dna.keyMatches = '';
+  pDna.dna.company = '';
+  const dnaSteps = T.agentNextSources(dnaId, 5);
+  assert(dnaSteps.some(s => s.kind === 'dna'), 'agent queues DNA workspace when matches empty');
+
+  assert(document.getElementById('dnaMatchFile'), 'DNA CSV file input exists');
 
   console.log(process.exitCode ? '\nSMOKE TEST FAILED' : '\nALL SMOKE TESTS PASSED');
 }, 50);

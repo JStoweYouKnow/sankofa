@@ -574,7 +574,9 @@ function applyStoryDrafts(){
       const parsed = parsePlace(person.birthplace);
       if(!plan.state) plan.state = STORY_PLACE.state || parsed.state || '';
       if(!plan.county) plan.county = STORY_PLACE.county || parsed.county || '';
-      if(person.enslaverSurname && !plan.candidates.some(c =>
+      if(person.enslaverSurname && typeof linkPlanCandidate === 'function'){
+        linkPlanCandidate(person.id, person.enslaverSurname, { note: 'From oral history', status: 'untested' });
+      } else if(person.enslaverSurname && !plan.candidates.some(c =>
         String(c.name).toLowerCase() === person.enslaverSurname.toLowerCase()
       )){
         plan.candidates.push({ name: person.enslaverSurname, status: 'untested', note: 'From oral history' });

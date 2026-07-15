@@ -1,0 +1,53 @@
+0 HEAD
+1 SOUR SAMPLE
+2 NAME Forebear fixture
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+0 @I1@ INDI
+1 NAME Hattie /Freeman/
+1 SEX U
+1 BIRT
+2 DATE ABT 1867
+2 PLAC Belmont, Gaston County, NC
+1 FAMC @F1@
+0 @I2@ INDI
+1 NAME Silas /Freeman/
+1 SEX U
+1 BIRT
+2 DATE ABT 1840
+2 PLAC Gaston County, NC
+1 FAMS @F1@
+1 NOTE Associated enslaver surname: Rhyne
+0 @I3@ INDI
+1 NAME Chaney /Freeman/
+1 NAME Chaney /Stowe/
+1 SEX U
+1 BIRT
+2 DATE ABT 1845
+2 PLAC Gaston County, NC
+1 FAMS @F1@
+0 @I4@ INDI
+1 NAME Thomas /Freeman/
+1 SEX U
+1 BIRT
+2 DATE ABT 1870
+2 PLAC Gaston County, NC
+1 FAMC @F1@
+0 @I5@ INDI
+1 NAME Mary /Freeman/
+1 SEX U
+1 BIRT
+2 DATE 1872
+2 PLAC Gaston County, NC
+1 FAMC @F1@
+0 @F1@ FAM
+1 HUSB @I2@
+1 WIFE @I3@
+1 CHIL @I1@
+1 CHIL @I4@
+1 CHIL @I5@
+1 MARR
+2 NOTE cohabitation bond, 1866
+0 TRLR

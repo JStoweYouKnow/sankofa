@@ -71,6 +71,10 @@ function coachSourceUrl(sourceId, person, plan){
   return typeof src.url === 'function' ? src.url(ctx) : (src.url || '');
 }
 
+function coachForPerson(personId){
+  return coachAttachTrust(coachForPersonCore(personId));
+}
+
 /**
  * @returns {{
  *   key: string,
@@ -81,7 +85,7 @@ function coachSourceUrl(sourceId, person, plan){
  *   secondary?: { label: string, kind: string }
  * }}
  */
-function coachForPerson(personId){
+function coachForPersonCore(personId){
   if(!personId){
     return {
       key: 'add',
@@ -153,6 +157,64 @@ function coachForPerson(personId){
       primary: { label: 'Return to Discovery', kind: 'discover' },
       secondary: { label: 'Open plan', kind: 'open-plan' }
     };
+  }
+
+  // Case-file hypotheses (leads) beat generic checklist copy when we’re
+  // in the emancipation bridge steps — still never invents citations.
+  if(typeof ensureCase === 'function' && (step.key === 'records' || step.key === 'enslaver' || step.key === 'confirm')){
+    const openHyp = typeof caseOpenHypothesis === 'function'
+      ? caseOpenHypothesis(personId)
+      : null;
+    if(openHyp){
+      const candName = (openHyp.enslaverName || '').trim();
+      const hasCand = candName && plan.candidates.some(c =>
+        (c.name || '').toLowerCase() === candName.toLowerCase()
+      );
+      if(candName && !hasCand){
+        return {
+          key: step.key,
+          chip: 'Case: add candidate',
+          headline: 'File “' + candName + '” as an enslaver candidate to test',
+          why: openHyp.text + ' Status on the case: ' + (CASE_STATUSES[openHyp.status] || openHyp.status) + '.',
+          primary: { label: 'Add candidate & open plan', kind: 'add-hint-candidate', candidateName: candName },
+          secondary: { label: 'Find earliest mentions', kind: 'earliest' }
+        };
+      }
+      if(candName){
+        const untested = plan.candidates.find(c =>
+          (c.name || '').toLowerCase() === candName.toLowerCase() &&
+          (!c.status || c.status === 'untested')
+        );
+        if(untested || openHyp.status === 'lead' || openHyp.status === 'hypothesis'){
+          const schedUrl = typeof familySearchCollectionUrl === 'function'
+            ? familySearchCollectionUrl({
+                surname: candName.split(/\s+/).pop() || '',
+                county: plan.county,
+                state: plan.state
+              }, '3161105')
+            : '';
+          return {
+            key: step.key,
+            chip: 'Case: test lead',
+            headline: 'Test case lead “' + candName + '”',
+            why: openHyp.text,
+            primary: schedUrl
+              ? { label: 'Open 1860 slave schedule', kind: 'open-url', url: schedUrl }
+              : { label: 'Find earliest mentions', kind: 'earliest' },
+            secondary: { label: 'Open case on plan', kind: 'open-plan' }
+          };
+        }
+      } else {
+        return {
+          key: step.key,
+          chip: 'Case: test hypothesis',
+          headline: 'Work an open case hypothesis',
+          why: openHyp.text,
+          primary: { label: 'Find earliest mentions', kind: 'earliest' },
+          secondary: { label: 'Open case on plan', kind: 'open-plan' }
+        };
+      }
+    }
   }
 
   if(step.key === 'anchor'){
@@ -350,14 +412,24 @@ function coachForPerson(personId){
 
   if(step.key === 'africa'){
     const synth = typeof synthesizeBridge === 'function' ? synthesizeBridge(personId) : null;
-    if(synth && synth.ready){
+    if(synth && synth.ready && synth.africaAgentReady){
       return {
         key: 'africa',
         chip: 'Next: Bridge synthesis',
         headline: 'Review the Bridge synthesis for ' + person.name,
         why: synth.narrative,
         primary: { label: 'Open Bridge synthesis', kind: 'open-plan' },
-        secondary: { label: 'Edit DNA / Africa', kind: 'edit-person' }
+        secondary: { label: 'Edit DNA / Africa', kind: 'edit-person-dna' }
+      };
+    }
+    if(synth && synth.ready && !synth.africaAgentReady){
+      return {
+        key: 'africa',
+        chip: 'Next: Case foothold',
+        headline: 'Case file needs a foothold before Africa ethnonyms',
+        why: (synth.readinessNote || '') + ' Import DNA matches anytime; ethnonym apply stays gated.',
+        primary: { label: 'Open plan (add enslaver lead)', kind: 'open-plan' },
+        secondary: { label: 'Open DNA workspace', kind: 'edit-person-dna' }
       };
     }
     return {
@@ -367,10 +439,10 @@ function coachForPerson(personId){
         ? 'Confirm a named source before leaning on Africa claims'
         : 'Capture DNA, ethnonyms, and voyage clues',
       why: synth && !synth.ready
-        ? synth.readinessNote + ' The synthesis panel still drafts gaps and DNA questions you can work now.'
+        ? synth.readinessNote + ' Import DNA matches and work DNA questions now — Africa ethnonyms stay gated.'
         : 'You rarely surname-search Africa. Use region estimates, African-born mentions, and Slave Voyages — tag every claim with honest confidence.',
-      primary: { label: 'Open plan (Africa step)', kind: 'open-plan' },
-      secondary: { label: 'Edit person (DNA / Africa)', kind: 'edit-person' }
+      primary: { label: 'Open DNA workspace', kind: 'edit-person-dna' },
+      secondary: { label: 'Open plan (Africa step)', kind: 'open-plan' }
     };
   }
 
@@ -393,9 +465,13 @@ function coachBannerHtml(personId){
   const aiBtn = typeof llmEnhanceBtnHtml === 'function'
     ? llmEnhanceBtnHtml('coach', personId || '')
     : '';
-  return `<div class="coach-banner" data-coach-person="${esc(personId || '')}">
+  const trust = typeof trustBadge === 'function'
+    ? trustBadge(c.trust || 'lead')
+    : '';
+  return `<div class="coach-banner" data-coach-person="${esc(personId || '')}" data-coach-key="${esc(c.key || '')}" data-coach-kind="${esc((c.primary && c.primary.kind) || '')}" data-coach-trust="${esc(c.trust || 'lead')}">
     <div class="coach-top">
       <div class="coach-label">${esc(label)}</div>
+      ${trust}
       <span class="coach-source-pill" title="Actions stay rule-based; AI only polishes wording">Guided</span>
     </div>
     <div class="coach-headline">${esc(c.headline)}</div>
@@ -403,6 +479,7 @@ function coachBannerHtml(personId){
     <div class="coach-actions">
       <button type="button" class="btn btn-small" data-coach-act="primary" data-coach-person="${esc(personId || '')}">${esc(c.primary.label)}</button>
       ${secondary}
+      ${personId ? `<button type="button" class="btn btn-ghost btn-small" onclick="agentRunNext('${esc(personId)}',3)">Run next 3</button>` : ''}
       ${aiBtn}
     </div>
   </div>`;
@@ -421,8 +498,10 @@ function runCoachKind(personId, action){
     else openPersonForm();
     return;
   }
-  if(action.kind === 'edit-person'){
-    if(personId) openPersonForm(personId);
+  if(action.kind === 'edit-person' || action.kind === 'edit-person-dna'){
+    if(action.kind === 'edit-person-dna' && typeof openDnaWorkspace === 'function'){
+      openDnaWorkspace(personId);
+    } else if(personId) openPersonForm(personId);
     else openPersonForm();
     return;
   }
@@ -463,7 +542,11 @@ function runCoachKind(personId, action){
     activePlanPersonId = personId;
     const plan = ensurePlan(personId);
     const name = (action.candidateName || '').trim();
-    if(name && !plan.candidates.some(c => (c.name || '').toLowerCase() === name.toLowerCase())){
+    if(name && typeof linkPlanCandidate === 'function'){
+      linkPlanCandidate(personId, name, { note: '' });
+      touchPlan();
+      saveData();
+    } else if(name && !plan.candidates.some(c => (c.name || '').toLowerCase() === name.toLowerCase())){
       plan.candidates.push({ name, status: 'untested', note: '' });
       touchPlan();
       saveData();
@@ -520,21 +603,23 @@ function draftLogPrefill(opts){
   const status = opts.status || 'promising';
   const personId = opts.personId || '';
   const surname = opts.surname || '';
+  const variants = (opts.variants || []).filter(Boolean);
   const place = opts.place || '';
   const label = opts.sourceName || 'Source';
   const where = place ? (' in ' + place) : '';
   const who = surname ? ('"' + surname + '"') : 'this name';
+  const also = variants.length ? (' (and variants: ' + variants.join(', ') + ')') : '';
 
   let findings = opts.findings || '';
   if(!findings){
     if(status === 'dead-end' || status === 'nothing'){
-      findings = 'Searched ' + who + where + ' in ' + label + ' — nothing found.';
+      findings = 'Searched ' + who + also + where + ' in ' + label + ' — nothing found.';
     } else if(opts.fromLive){
       findings = 'Live hit from ' + (opts.liveSource || 'archive search') + ': ' + label
         + (opts.note ? (' — ' + opts.note) : '')
         + '. Describe how it connects to your ancestor (names, dates, page/image).';
     } else {
-      findings = 'Searched ' + who + where + ' via ' + label
+      findings = 'Searched ' + who + also + where + ' via ' + label
         + '. Describe what you found — names, dates, relationships, page or image numbers.';
     }
   }
