@@ -18,6 +18,7 @@ Forebear is an ancestry discovery companion built for the specific challenges of
 - **Field Guide** — a short orientation to Freedmen's Bureau records, Freedman's Bank registers, cohabitation records, WPA slave narratives, and tracing through an enslaver's surname.
 - **Family sync (optional)** — share one tree across devices or relatives via a family code + passphrase. Off by default; the app stays fully usable without it.
 - **Onboarding** — a one-time welcome explains the suggested path (reopen it any time via "How this works" in the sidebar); a fictional **sample family** (the Freemans of Gaston County, NC) can be loaded to explore a populated tree, log, and half-finished research plan, then removed in one click; a dismissible getting-started checklist tracks the first five actions; and the person form keeps the DNA and Bridge-to-Africa sections collapsed until you need them.
+- **Guided next steps (rule-based)** — coach, story intake, hit interpretation, and bridge synthesis always work offline with no API key. Optional **Enhance with AI** (OpenAI key under Connect data sources) only polishes wording; actions and structure stay rule-based.
 
 ## Running it locally
 
@@ -42,8 +43,14 @@ forebear/
 ├── js/app.js         # app logic, rendering, and the Smithsonian API integration
 ├── js/plan.js        # Research Plan ("get past 1870" + Bridge to Africa)
 ├── js/africa.js      # Ethnonym glossary, voyage links, DNA/confidence helpers
+├── js/coach.js       # next-step coach (rule-based)
+├── js/story.js       # family-story → people intake
+├── js/interpret.js   # Discovery hit reading / enslaver ranking
+├── js/synthesize.js  # Bridge / DNA synthesis
+├── js/llm.js         # optional OpenAI polish wrappers
 ├── js/sync.js        # optional family sync client
-└── api/sync.js       # optional Vercel serverless sync endpoint
+├── api/sync.js       # optional Vercel serverless sync endpoint
+└── api/llm.js        # optional Vercel OpenAI proxy (client-supplied key)
 ```
 
 ## Storage
@@ -76,6 +83,10 @@ The Discovery tab queries three APIs directly from the browser:
 
 The key is entered in-app (Discovery → "Connect data sources") and stored via the same `storage` shim, so it lives in `localStorage` alongside everything else. It is never sent anywhere except directly to the Smithsonian's own API.
 
+### Optional AI polish
+
+Coach, story intake, hit interpretation, and bridge synthesis are **rule-based by default** — no key required. If you paste an OpenAI key under the same Connect panel and click **Enhance with AI**, the browser posts to this app’s `/api/llm` proxy (your key in `Authorization` only for that request). That needs a deploy with the serverless function, or `vercel dev` locally — a plain static server alone won’t expose `/api/llm`.
+
 **Verified July 2026:** the Smithsonian endpoint returns results with `Access-Control-Allow-Origin: *`, so it works from the browser. A **National Archives Catalog v2** live integration used to exist, but as of July 2026 `catalog.archives.gov/api/v2/*` serves the catalog website's HTML shell to every request (even the documented curl examples), so it was removed rather than shipped dead — the Discovery tab links into NARA's catalog search UI instead. If the API comes back, the old integration is in git history (`searchNARA` in `js/app.js`).
 
 ## Testing
@@ -86,7 +97,7 @@ The key is entered in-app (Discovery → "Connect data sources") and stored via 
 
 It's a static site, so any static host works:
 
-- **Vercel** — `vercel` from this directory, or connect the GitHub repo in the Vercel dashboard for auto-deploys. Needed if you want the optional `/api/sync` endpoint.
+- **Vercel** — `vercel` from this directory, or connect the GitHub repo in the Vercel dashboard for auto-deploys. Needed if you want the optional `/api/sync` or `/api/llm` endpoints.
 - **GitHub Pages** — enable Pages on this repo, pointing at the root of `main`. Sync endpoint won't be available here unless you host it elsewhere.
 - **Netlify / Cloudflare Pages** — drag-and-drop the folder or connect the repo.
 

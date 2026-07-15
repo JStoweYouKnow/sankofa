@@ -34,7 +34,7 @@ const META_KEY = 'forebear-meta-v1';
 const SCHEMA_VERSION = 5;
 let STATE = { people: [], logs: [], plans: {}, tombstones: [], sessions: {} };
 let META = { lastExportAt: 0, lastChangedAt: 0 };
-let API_KEYS = { smithsonian: '' };
+let API_KEYS = { smithsonian: '', llm: '', llmModel: 'gpt-4o-mini', llmUse: true };
 let editingPersonId = null;
 let editingLogId = null;
 let pendingImport = null;
@@ -615,8 +615,8 @@ function renderTree(){
         </div>
         <div class="onboard-path">
           <div class="onboard-path-label">I only have family stories</div>
-          <p class="onboard-path-desc">You don't know the first name or exact place, only a surname and oral tradition. Add your oldest known relative — even just a surname and a decade — and the Research Plan will walk you through finding earlier records.</p>
-          <button class="btn btn-small" onclick="openPersonForm()">+ Start with what you know</button>
+          <p class="onboard-path-desc">You don't know the first name or exact place, only a surname and oral tradition. Paste what you remember — Forebear drafts people and places for you to review, then starts a research plan.</p>
+          <button class="btn btn-small" onclick="openStoryIntake()">+ Start from a story</button>
         </div>
         <div class="onboard-path">
           <div class="onboard-path-label">Caribbean or non-U.S. family</div>
@@ -662,7 +662,7 @@ function renderTree(){
       const facts = evidencedFacts(p.id);
       const next = typeof planNextStep === 'function' ? planNextStep(p.id) : null;
       const nextLine = next
-        ? `<button type="button" class="plan-next-chip ${next.key==='done'?'done':''}" onclick="openPlanForPerson('${esc(p.id)}', event)" title="${esc(next.title)}">${esc(next.short)}</button>`
+        ? `<button type="button" class="plan-next-chip ${next.key==='done'?'done':''}" onclick="runCoachAction('${esc(p.id)}', 'primary', event)" title="${esc(next.title)}">${esc(next.short)}</button>`
         : '';
       const discoverLine = `<button type="button" class="discover-chip" onclick="discoverPerson('${esc(p.id)}', event)" title="Search Discovery for ${esc(p.name)}">&#x2315; Search Discovery</button>`;
       html += `<div class="person-card" data-person-id="${esc(p.id)}" onclick="openPersonForm('${esc(p.id)}')">
@@ -1070,7 +1070,10 @@ function openLogForm(id, prefill){
       if(prefill.citation) document.getElementById('lCitation').value = prefill.citation;
       if(prefill.type) document.getElementById('lType').value = prefill.type;
       if(prefill.findings) document.getElementById('lFindings').value = prefill.findings;
+      if(prefill.nextSteps) document.getElementById('lNext').value = prefill.nextSteps;
       if(prefill.personId) document.getElementById('lPerson').value = prefill.personId;
+      if(prefill.status) document.getElementById('lStatus').value = prefill.status;
+      if(prefill.confidence) document.getElementById('lConfidence').value = prefill.confidence;
     }
   }
   document.getElementById('logOverlay').classList.add('open');
@@ -1155,15 +1158,31 @@ async function loadKeys(){
     if(res && res.value){
       const parsed = JSON.parse(res.value);
       API_KEYS.smithsonian = parsed.smithsonian || '';
+      API_KEYS.llm = parsed.llm || '';
+      API_KEYS.llmModel = parsed.llmModel || 'gpt-4o-mini';
+      API_KEYS.llmUse = parsed.llmUse !== false;
     }
   }catch(e){
     // no keys saved yet
   }
-  document.getElementById('keySmithsonian').value = API_KEYS.smithsonian;
+  const sm = document.getElementById('keySmithsonian');
+  if(sm) sm.value = API_KEYS.smithsonian;
+  const lk = document.getElementById('keyLlm');
+  if(lk) lk.value = API_KEYS.llm;
+  const lm = document.getElementById('keyLlmModel');
+  if(lm) lm.value = API_KEYS.llmModel || 'gpt-4o-mini';
+  const lu = document.getElementById('keyLlmUse');
+  if(lu) lu.checked = API_KEYS.llmUse !== false;
   updateKeyStatus();
 }
 async function saveKeys(){
-  API_KEYS.smithsonian = document.getElementById('keySmithsonian').value.trim();
+  API_KEYS.smithsonian = (document.getElementById('keySmithsonian').value || '').trim();
+  const lk = document.getElementById('keyLlm');
+  if(lk) API_KEYS.llm = lk.value.trim();
+  const lm = document.getElementById('keyLlmModel');
+  if(lm) API_KEYS.llmModel = lm.value.trim() || 'gpt-4o-mini';
+  const lu = document.getElementById('keyLlmUse');
+  if(lu) API_KEYS.llmUse = !!lu.checked;
   try{
     await storage.set(KEYS_STORAGE_KEY, JSON.stringify(API_KEYS), false);
     showToast('Keys saved');
@@ -1174,7 +1193,20 @@ async function saveKeys(){
 }
 function updateKeyStatus(){
   const sEl = document.getElementById('statusSmithsonian');
-  sEl.innerHTML = `<span class="key-dot ${API_KEYS.smithsonian?'on':''}"></span> ${API_KEYS.smithsonian?'Connected':'Not connected'}`;
+  if(sEl){
+    sEl.innerHTML = `<span class="key-dot ${API_KEYS.smithsonian?'on':''}"></span> ${API_KEYS.smithsonian?'Connected':'Not connected'}`;
+  }
+  const lEl = document.getElementById('statusLlm');
+  if(lEl){
+    const on = !!(API_KEYS.llm && API_KEYS.llmUse !== false);
+    lEl.innerHTML = `<span class="key-dot ${on?'on':''}"></span> ${on?'AI ready':'Not connected'}`;
+  }
+  const btn = document.getElementById('keysToggleBtn');
+  if(btn){
+    const n = [API_KEYS.smithsonian, API_KEYS.llm && API_KEYS.llmUse !== false].filter(Boolean).length;
+    btn.textContent = n ? ('Data sources · ' + n + ' connected') : 'Connect data sources';
+  }
+  if(typeof refreshStoryLlmBtn === 'function') refreshStoryLlmBtn();
 }
 function toggleKeysPanel(){
   const panel = document.getElementById('keysPanel');
@@ -1221,11 +1253,17 @@ let RESULT_CACHE = [];
 function cacheResult(c){ return RESULT_CACHE.push(c) - 1; }
 function resultCard(c){
   const idx = cacheResult(c);
+  const ctx = (typeof LAST_DISCOVERY_CTX !== 'undefined' && LAST_DISCOVERY_CTX) || {};
+  const interpretFn = typeof interpretHitHtmlWithLlm === 'function'
+    ? interpretHitHtmlWithLlm
+    : (typeof interpretHitHtml === 'function' ? interpretHitHtml : null);
+  const interpret = interpretFn ? interpretFn(c, ctx) : '';
   return `<div class="result-card">
     <div class="result-left">
       ${c.source?`<div class="source-tag">${esc(c.source)}</div>`:''}
       <div class="result-label">${esc(c.label)}</div>
       <div class="result-note">${esc(c.note||'')}</div>
+      ${interpret}
       <div class="result-url">${esc(c.url)}</div>
     </div>
     <div class="result-actions">
@@ -1415,22 +1453,40 @@ function resolveSource(sourceId, status){
   if(!s || !card || (status !== 'found' && status !== 'nothing')) return;
   s.checks[sourceId] = { status, at: Date.now() };
   s.updatedAt = Date.now();
+  const place = [s.county, s.state].filter(Boolean).join(', ');
+  const personId = sessionPersonId();
+  const draftOpts = {
+    sourceName: card.label,
+    citation: card.url,
+    type: card.type || 'Other',
+    personId,
+    surname: s.surname,
+    place,
+    status: status === 'nothing' ? 'nothing' : 'found'
+  };
   if(status === 'nothing'){
-    const place = [s.county, s.state].filter(Boolean).join(', ');
+    const draft = typeof draftLogPrefill === 'function'
+      ? draftLogPrefill(draftOpts)
+      : {
+          findings: 'Searched "' + s.surname + '"'
+            + (s.variants && s.variants.length ? ' (and variants: ' + s.variants.join(', ') + ')' : '')
+            + (place ? ' in ' + place : '') + ' — nothing found.',
+          nextSteps: '',
+          confidence: 'speculative',
+          status: 'dead-end'
+        };
     STATE.logs.push({
       id: uid(),
       date: todayStr(),
-      personId: sessionPersonId(),
+      personId,
       type: card.type || 'Other',
-      status: 'dead-end',
+      status: draft.status || 'dead-end',
       sourceName: card.label,
       citation: card.url,
-      findings: 'Searched "' + s.surname + '"'
-        + (s.variants && s.variants.length ? ' (and variants: ' + s.variants.join(', ') + ')' : '')
-        + (place ? ' in ' + place : '') + ' — nothing found.',
-      nextSteps: '',
+      findings: draft.findings,
+      nextSteps: draft.nextSteps || '',
       supports: [],
-      confidence: 'speculative',
+      confidence: draft.confidence || 'speculative',
       updatedAt: Date.now()
     });
   }
@@ -1439,12 +1495,10 @@ function resolveSource(sourceId, status){
   renderQuickLinksForActive();
   renderSessionSummary();
   if(status === 'found'){
-    openLogForm(null, {
-      sourceName: card.label,
-      citation: card.url,
-      type: card.type,
-      personId: sessionPersonId()
-    });
+    const draft = typeof draftLogPrefill === 'function'
+      ? draftLogPrefill(draftOpts)
+      : { sourceName: card.label, citation: card.url, type: card.type, personId };
+    openLogForm(null, draft);
   }
 }
 function renderQuickLinksForActive(){
@@ -1568,6 +1622,7 @@ async function searchSmithsonian(container, ctx){
     if(rows.length===0){
       updateLiveSummary('Smithsonian', '0');
       container.innerHTML = emptyResultCard("No Smithsonian results. Try dropping the place, or search just the surname.");
+      if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
       return;
     }
     updateLiveSummary('Smithsonian', String(total));
@@ -1582,6 +1637,7 @@ async function searchSmithsonian(container, ctx){
       const preview = /^https?:\/\//.test(img) ? { kind: 'image', sizes: [img], initial: 0 } : null;
       return resultCard({label: title, note, url: link, type: "Freedmen's Bureau Record", source: 'Smithsonian', preview});
     }).join('');
+    if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   }catch(e){
     updateLiveSummary('Smithsonian', 'error', 'err');
     container.innerHTML = errorCard('Smithsonian Open Access', apiErrorMessage(e));
@@ -1628,6 +1684,7 @@ async function searchLOC(container, ctx){
     if(rows.length===0){
       updateLiveSummary('Newspapers', '0');
       container.innerHTML = emptyResultCard('No newspaper pages matched. Try dropping the given name, or search a variant spelling.');
+      if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
       return;
     }
     updateLiveSummary('Newspapers', String(total));
@@ -1641,9 +1698,11 @@ async function searchLOC(container, ctx){
         url: link,
         type: 'Newspaper / Advertisement',
         source: 'Chronicling America',
+        year: year || undefined,
         preview: locPreviewFromResult(r)
       });
     }).join('');
+    if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   }catch(e){
     updateLiveSummary('Newspapers', 'error', 'err');
     container.innerHTML = errorCard('Chronicling America', apiErrorMessage(e));
@@ -1688,6 +1747,7 @@ async function searchInternetArchive(container, ctx){
     if(docs.length===0){
       updateLiveSummary('Internet Archive', '0');
       container.innerHTML = emptyResultCard('No Internet Archive texts matched this place — try the county seat or a neighboring county.');
+      if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
       return;
     }
     updateLiveSummary('Internet Archive', String(total));
@@ -1697,8 +1757,10 @@ async function searchInternetArchive(container, ctx){
       url: 'https://archive.org/details/' + encodeURIComponent(d.identifier) + '?q=' + encodeURIComponent(ctx.surname),
       type: 'Other',
       source: 'Internet Archive',
+      year: d.year || undefined,
       preview: { kind: 'iframe', src: 'https://archive.org/embed/' + encodeURIComponent(d.identifier) }
     })).join('');
+    if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   }catch(e){
     updateLiveSummary('Internet Archive', 'error', 'err');
     container.innerHTML = errorCard('Internet Archive', apiErrorMessage(e));
@@ -1778,7 +1840,11 @@ function runEarliestDiscovery(){
 // plan worksheet.
 function addSurnameAsCandidate(){
   const s = activeSession();
-  if(!s || !s.personId) return;
+  if(!s || !s.surname) return;
+  if(typeof addEnslaverCandidate === 'function'){
+    addEnslaverCandidate(s.surname, 'From earliest-mentions surname hypothesis (Field Guide §6)');
+    return;
+  }
   const person = STATE.people.find(p=>p.id===s.personId);
   if(!person || typeof ensurePlan !== 'function') return;
   const plan = ensurePlan(s.personId);
@@ -1796,7 +1862,7 @@ function earliestExplainer(ctx, session){
   const hasPerson = !!(session && session.personId && STATE.people.find(p=>p.id===session.personId));
   return `<div class="strategy-card" style="margin-bottom:16px;">
     <div class="result-label">Earliest dated mentions of "${esc(ctx.surname)}", ${ctx.era.start}–${ctx.era.end}</div>
-    <div class="result-note">Results are sorted oldest-first. Mentions from before emancipation usually name the white family that held the surname — that's a lead, not a dead end: it's how you find enslaver candidates whose estate papers, tax lists, and slave-schedule entries may name your ancestors (Field Guide §6).</div>
+    <div class="result-note">Results are sorted oldest-first. Mentions from before emancipation usually name the white family that held the surname — that's a lead, not a dead end: it's how you find enslaver candidates whose estate papers, tax lists, and slave-schedule entries may name your ancestors (Field Guide §6). Hits below are labeled automatically; ranked candidates appear under Hit reading.</div>
     ${hasPerson ? `<div class="plan-actions" style="margin-top:10px;">
       <button type="button" class="btn btn-small" onclick="addSurnameAsCandidate()">+ Add "${esc(ctx.surname)}" as an enslaver candidate</button>
     </div>` : ''}
@@ -1831,6 +1897,7 @@ function runDiscovery(forPersonId, mode){
   const placeLabel = ctx.state || 'any place';
   const nameLabel = [ctx.givenName, ctx.surname].filter(Boolean).join(' ');
   results.innerHTML = `
+    ${session.personId && typeof coachBannerHtml === 'function' ? coachBannerHtml(session.personId) : ''}
     <div class="discovery-summary">Searching <strong>${esc(nameLabel)}</strong> in <strong>${esc(placeLabel)}</strong>${ctx.variants ? ' · variants: ' + esc(normalizeVariants(ctx.variants).join(', ')) : ''}${ctx.era ? ' · <strong>earliest mentions ' + ctx.era.start + '–' + ctx.era.end + '</strong>' : ''}</div>
     <div id="sessionSummary"></div>
     ${ctx.era ? earliestExplainer(ctx, session) : ''}
@@ -1844,11 +1911,13 @@ function runDiscovery(forPersonId, mode){
       </div>
     </div>
     <div id="quickLinks"></div>
+    <div id="hitInsight"></div>
     <div id="strategyArea"></div>
   `;
 
   renderQuickLinks(document.getElementById('quickLinks'), ctx);
   renderSessionSummary();
+  if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   if(ctx.enslaver){
     document.getElementById('strategyArea').innerHTML = strategyCard(ctx.enslaver, ctx.county, ctx.state);
   }
@@ -1866,13 +1935,40 @@ function syncLogConfidence(status){
 }
 
 function queueLogFromResult(c){
-  openLogForm(null, {
-    sourceName: c.label,
-    citation: c.url,
-    type: c.type || "Freedmen's Bureau Record",
-    findings: '',
-    personId: sessionPersonId()
-  });
+  const s = activeSession();
+  const place = s ? [s.county, s.state].filter(Boolean).join(', ') : '';
+  const personId = sessionPersonId();
+  const ctx = LAST_DISCOVERY_CTX || {};
+  const interp = (typeof interpretHit === 'function') ? interpretHit(c, ctx) : null;
+  const findingsExtra = interp
+    ? ('Reading: ' + interp.badge + (interp.year ? ' (' + interp.year + ')' : '') + ' — ' + interp.why)
+    : '';
+  const draft = typeof draftLogPrefill === 'function'
+    ? draftLogPrefill({
+        sourceName: c.label,
+        citation: c.url,
+        type: c.type || "Freedmen's Bureau Record",
+        personId,
+        surname: (s && s.surname) || '',
+        place,
+        note: c.note || '',
+        liveSource: c.source || '',
+        fromLive: true,
+        status: 'found',
+        findings: findingsExtra
+          ? ('Live hit from ' + (c.source || 'archive search') + ': ' + c.label
+            + (c.note ? (' — ' + c.note) : '') + '\n\n' + findingsExtra
+            + '\n\nDescribe how it connects to your ancestor (names, dates, page/image).')
+          : ''
+      })
+    : {
+        sourceName: c.label,
+        citation: c.url,
+        type: c.type || "Freedmen's Bureau Record",
+        findings: findingsExtra,
+        personId
+      };
+  openLogForm(null, draft);
 }
 
 // ---------- Theme ----------

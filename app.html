@@ -62,7 +62,10 @@
           <h1 class="view-title">Family Tree</h1>
           <div class="view-sub">Every entry is a claim that needs evidence. Add ancestors as you confirm them, and link each one to the research that backs them up.</div>
         </div>
-        <button class="btn" onclick="openPersonForm()">+ Add a person</button>
+        <div class="view-head-actions">
+          <button class="btn btn-ghost" onclick="openStoryIntake()">From a story</button>
+          <button class="btn" onclick="openPersonForm()">+ Add a person</button>
+        </div>
       </div>
       <div id="gettingStarted"></div>
       <div id="treeContent"></div>
@@ -106,9 +109,23 @@
         <div class="keys-row">
           <div class="key-field">
             <label for="keySmithsonian">Smithsonian Open Access API key</label>
-            <input id="keySmithsonian" type="text" placeholder="Paste your api.data.gov key">
+            <input id="keySmithsonian" type="text" placeholder="Paste your api.data.gov key" autocomplete="off">
             <div class="field-hint">Free, instant signup at <a href="https://api.data.gov/signup/" target="_blank" rel="noopener">api.data.gov/signup</a>. Powers live search of the Smithsonian's collections, including Freedmen's Bureau material.</div>
             <div class="key-status" id="statusSmithsonian"><span class="key-dot"></span> Not connected</div>
+          </div>
+          <div class="key-field">
+            <label for="keyLlm">OpenAI API key <span class="toggle-hint">(optional AI)</span></label>
+            <input id="keyLlm" type="password" placeholder="sk-…" autocomplete="off">
+            <div class="field-hint">Stays in this browser. Sent only to this app’s <code>/api/llm</code> proxy when you click Enhance with AI — never required for core research. <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Get a key</a>.</div>
+            <div class="keys-ai-row">
+              <label class="inline-check"><input type="checkbox" id="keyLlmUse" checked> Use AI when I ask</label>
+              <select id="keyLlmModel" aria-label="Model">
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              </select>
+            </div>
+            <div class="key-status" id="statusLlm"><span class="key-dot"></span> Not connected</div>
           </div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-top:14px;">
@@ -544,6 +561,39 @@
   </div>
 </div>
 
+<!-- ===== STORY INTAKE MODAL ===== -->
+<div class="overlay" id="storyOverlay">
+  <div class="modal story-modal">
+    <button class="close-x" onclick="closeOverlay('storyOverlay')">✕</button>
+    <div class="modal-title">Start from a family story</div>
+    <div class="modal-sub">Paste what you remember — names, places, decades, who owned the land. Forebear drafts people for you to review. Nothing is saved until you confirm.</div>
+    <div class="field full">
+      <label for="storyText">Your story</label>
+      <textarea id="storyText" rows="7" placeholder="e.g. My great-grandmother Hattie Freeman was born around 1867 in Gaston County, NC. Her parents Silas and Chaney lived on the Rhyne place. Family said Silas was also called Silas Rhyne."></textarea>
+      <div class="field-hint">Works best with “my grandmother Name…”, a county or state, and phrases like “born around 1867” or “owned by the Rhyne family.”</div>
+      <div class="story-examples" id="storyExamples">
+        <span class="story-examples-label">Try an example:</span>
+        <button type="button" class="btn btn-ghost btn-small" data-story-ex="0">Gaston County</button>
+        <button type="button" class="btn btn-ghost btn-small" data-story-ex="1">Caribbean</button>
+        <button type="button" class="btn btn-ghost btn-small" data-story-ex="2">Only a surname</button>
+      </div>
+    </div>
+    <div class="story-parse-row">
+      <button type="button" class="btn" onclick="runStoryParse()">Read my story</button>
+      <button type="button" class="btn btn-ghost" id="storyLlmBtn">Enhance with AI</button>
+    </div>
+    <div id="storyWarnings"></div>
+    <div id="storyReview"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeOverlay('storyOverlay')">Cancel</button>
+      <div class="modal-actions-right">
+        <button type="button" class="btn btn-ghost" onclick="openPersonForm(); closeOverlay('storyOverlay')">Add one person instead</button>
+        <button type="button" class="btn" id="storyApplyBtn" disabled onclick="applyStoryDrafts()">Add to tree</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== WELCOME MODAL ===== -->
 <div class="overlay" id="welcomeOverlay">
   <div class="modal welcome-modal">
@@ -570,6 +620,11 @@
 <script src="js/africa.js"></script>
 <script src="js/app.js"></script>
 <script src="js/plan.js"></script>
+<script src="js/coach.js"></script>
+<script src="js/story.js"></script>
+<script src="js/interpret.js"></script>
+<script src="js/synthesize.js"></script>
+<script src="js/llm.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/sample.js"></script>
 </body>

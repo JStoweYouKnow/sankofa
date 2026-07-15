@@ -96,9 +96,14 @@ function planCtx(person, plan){
 }
 
 // Answer "what's my next step for Grandma Hattie?" — used by the
-// plan banner and the tree cards.
+// plan banner and the tree cards. Prefers the rule-based coach when
+// loaded; falls back to the first open Plan step.
 function planNextStep(personId){
   if(!personId) return null;
+  if(typeof coachForPerson === 'function'){
+    const c = coachForPerson(personId);
+    return { key: c.key, title: c.headline, short: c.chip };
+  }
   const plan = STATE.plans[personId];
   if(!plan){
     return { key: 'start', title: 'Start a research plan', short: 'Start plan' };
@@ -157,10 +162,14 @@ function renderPlanView(){
   const next = planNextStep(activePlanPersonId);
 
   const stateOptions = placeSelectOptions(plan.state);
-  html += `<div class="plan-next">
-    <div class="plan-next-label">Next step for ${esc(person.name)}</div>
-    <div class="plan-next-title">${esc(next.title)}</div>
-  </div>`;
+  if(typeof coachBannerHtml === 'function'){
+    html += coachBannerHtml(activePlanPersonId);
+  } else {
+    html += `<div class="plan-next">
+      <div class="plan-next-label">Next step for ${esc(person.name)}</div>
+      <div class="plan-next-title">${esc(next.title)}</div>
+    </div>`;
+  }
 
   html += `<div class="plan-context">
     <div class="field">
@@ -207,8 +216,19 @@ function planLogBtn(prefill, label){
   return `<button class="btn btn-ghost btn-small" onclick="planLog(${idx})">${esc(label||'+ Log this search')}</button>`;
 }
 function planLog(idx){
-  const pf = PLAN_LOG_ITEMS[idx];
-  if(pf) openLogForm(null, pf);
+  let pf = PLAN_LOG_ITEMS[idx];
+  if(!pf) return;
+  if(typeof draftLogPrefill === 'function' && !pf.findings){
+    const person = pf.personId && STATE.people.find(p => p.id === pf.personId);
+    const plan = pf.personId && STATE.plans[pf.personId];
+    const place = plan ? [plan.county, plan.state].filter(Boolean).join(', ') : '';
+    pf = draftLogPrefill(Object.assign({}, pf, {
+      surname: person ? planSurname(person) : '',
+      place,
+      status: 'found'
+    }));
+  }
+  openLogForm(null, pf);
 }
 
 function planStepActions(key, person, plan){
@@ -352,7 +372,10 @@ function planStepActions(key, person, plan){
           <button type="button" class="btn btn-ghost btn-small" onclick="openPersonForm('${esc(person.id)}')">Open DNA workspace on their card</button>
         </div>`;
 
+    const synth = typeof synthesizeBridgeHtml === 'function' ? synthesizeBridgeHtml(person.id) : '';
+
     return `
+      ${synth}
       <div class="callout" style="margin-top:0;">
         <div class="callout-title">Honest limit</div>
         Surname search rarely reaches a village in Africa. Aim for a <em>region</em> supported by DNA and/or documents, then keep testing.
