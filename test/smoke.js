@@ -108,6 +108,8 @@ eval(src + `
   renderDiscoveryPlaceholder, updateDiscoveryBadge, sessionCounts, sessionPersonId,
   selectPlanPerson, renderPlanView,
   earliestEra, runDiscovery, addSurnameAsCandidate,
+  discoveryFiltersFromForm, filterAndSortHits, hitYearNum, hitSourceKey,
+  applyDiscoveryFilters, discoveryEraFromFilters, discoveryWantsChronology,
   ensureCase, ensurePlan, caseCoverageSummary, caseOpenHypothesis, emptyCase,
   coachForPerson,
   linkPlanCandidate, getEnslaver, peopleLinkedToEnslaver, rankEnslaverCandidates,
@@ -491,6 +493,32 @@ setTimeout(async () => {
   await T.searchInternetArchive({ innerHTML: '' }, Object.assign({}, sctx, { era: { start: 1832, end: 1877 } }));
   assert(decodeURIComponent(capturedUrl).includes('year:[1832 TO 1877]'), 'IA gets year range');
   assert(capturedUrl.includes('sort[]=year+asc'), 'IA sorts year ascending');
+  global.fetch = (u)=>{ capturedUrl = String(u); return Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(IA_FIXTURE)) }); };
+  await T.searchInternetArchive({ innerHTML: '' }, Object.assign({}, sctx, { sort: 'newest' }));
+  assert(capturedUrl.includes('sort[]=year+desc'), 'IA newest sort is year descending');
+
+  // ---- Discovery filters: client-side chronological sort ----
+  assert(typeof T.filterAndSortHits === 'function' && typeof T.discoveryFiltersFromForm === 'function', 'discovery filter helpers loaded');
+  assert(T.hitYearNum({ year: '1865' }) === 1865, 'hitYearNum from year field');
+  assert(T.hitSourceKey({ source: 'Chronicling America' }) === 'loc', 'source key loc');
+  const mixed = [
+    { label: 'Late', source: 'Internet Archive', year: 1880 },
+    { label: 'Early', source: 'Chronicling America', year: 1845 },
+    { label: 'Mid', source: 'Smithsonian', year: 1866 },
+    { label: 'No date', source: 'Chronicling America' }
+  ];
+  const oldest = T.filterAndSortHits(mixed, { sort: 'oldest', yearFrom: null, yearTo: null, sources: { loc: true, ia: true, si: true } });
+  assert(oldest[0].label === 'Early' && oldest[1].label === 'Mid' && oldest[2].label === 'Late', 'oldest-first chronological order');
+  assert(oldest[3].label === 'No date', 'undated sinks to end when sorting');
+  const newest = T.filterAndSortHits(mixed, { sort: 'newest', yearFrom: null, yearTo: null, sources: { loc: true, ia: true, si: true } });
+  assert(newest[0].label === 'Late', 'newest-first chronological order');
+  const clipped = T.filterAndSortHits(mixed, { sort: 'relevance', yearFrom: 1860, yearTo: 1870, sources: { loc: true, ia: true, si: true } });
+  assert(clipped.length === 1 && clipped[0].label === 'Mid', 'year range filters live hits');
+  const noIa = T.filterAndSortHits(mixed, { sort: 'oldest', yearFrom: null, yearTo: null, sources: { loc: true, ia: false, si: true } });
+  assert(noIa.every(h => h.source !== 'Internet Archive'), 'source checkbox filters IA out');
+  assert(document.getElementById('tkSort') && document.getElementById('tkYearFrom'), 'discovery filter controls exist');
+  const eraFromFilters = T.discoveryEraFromFilters({ sort: 'oldest', yearFrom: 1840, yearTo: 1870, sources: {} }, null, '');
+  assert(eraFromFilters && eraFromFilters.start === 1840 && eraFromFilters.end === 1870, 'year filters become API era');
 
   // ---- earliest mentions: end-to-end + candidate hookup ----
   global.fetch = () => Promise.reject(new Error('offline in test'));

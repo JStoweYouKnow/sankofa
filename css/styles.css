@@ -742,6 +742,41 @@
     background:var(--card-raised);
   }
   .field-hint{font-size:11px;color:var(--ink-faint);}
+  .discovery-filters{
+    border-top:1px solid var(--line);
+    padding-top:14px;
+    margin-top:2px;
+  }
+  .discovery-filters-row{
+    display:grid;
+    grid-template-columns:1.4fr 1fr 1fr;
+    gap:14px 16px;
+  }
+  .discovery-source-filters{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:12px 16px;
+    margin-top:12px;
+  }
+  .discovery-filter-label{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--ink-soft);
+    font-weight:600;
+  }
+  .discovery-filter-meta{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin:0 0 10px;
+  }
+  #liveBySource.hidden-sources,
+  #liveHits.hidden-hits{display:none;}
+  .live-source[hidden]{display:none !important;}
+  @media (max-width:720px){
+    .discovery-filters-row{grid-template-columns:1fr;}
+  }
   .result-grid{display:flex;flex-direction:column;gap:12px;}
   .result-card{
     background:var(--card);

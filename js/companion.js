@@ -111,6 +111,7 @@ function companionConfirmImport(){
     if(typeof cacheResult === 'function') cacheResult(h);
   });
   companionRenderLiveSection(hits);
+  if(typeof applyDiscoveryFilters === 'function') applyDiscoveryFilters();
   if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   if(typeof agentOnCompanionImport === 'function') agentOnCompanionImport(hits.length);
   COMPANION.pendingHits = [];

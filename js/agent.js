@@ -53,7 +53,7 @@ function agentLiveSessionDone(session, sourceId){
 }
 
 function agentLiveContainer(liveKey){
-  const ids = { loc: 'liveLoc', ia: 'liveIa', si: 'liveSi' };
+    const ids = { loc: 'liveLoc', ia: 'liveIa', si: 'liveSmithsonian' };
   const el = typeof document !== 'undefined' && document.getElementById(ids[liveKey] || '');
   return el || { innerHTML: '' };
 }

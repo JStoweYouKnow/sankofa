@@ -1177,6 +1177,182 @@ function discoveryContextFromForm(){
     enslaver: document.getElementById('tkEnslaver').value.trim()
   };
 }
+
+function discoveryFiltersFromForm(){
+  const sortEl = document.getElementById('tkSort');
+  const yFrom = document.getElementById('tkYearFrom');
+  const yTo = document.getElementById('tkYearTo');
+  const srcLoc = document.getElementById('tkSrcLoc');
+  const srcIa = document.getElementById('tkSrcIa');
+  const srcSi = document.getElementById('tkSrcSi');
+  let yearFrom = yFrom && yFrom.value !== '' ? Number(yFrom.value) : null;
+  let yearTo = yTo && yTo.value !== '' ? Number(yTo.value) : null;
+  if(yearFrom != null && !Number.isFinite(yearFrom)) yearFrom = null;
+  if(yearTo != null && !Number.isFinite(yearTo)) yearTo = null;
+  if(yearFrom != null && yearTo != null && yearFrom > yearTo){
+    const t = yearFrom; yearFrom = yearTo; yearTo = t;
+  }
+  return {
+    sort: (sortEl && sortEl.value) || 'relevance',
+    yearFrom: yearFrom,
+    yearTo: yearTo,
+    sources: {
+      loc: !srcLoc || srcLoc.checked,
+      ia: !srcIa || srcIa.checked,
+      si: !srcSi || srcSi.checked
+    }
+  };
+}
+
+function hitYearNum(c){
+  if(!c) return null;
+  if(c.year != null && c.year !== ''){
+    const m = String(c.year).match(/\d{3,4}/);
+    if(m) return Number(m[0]);
+  }
+  const fromNote = String(c.note || '').match(/\b(1[6-9]\d{2}|20\d{2})\b/);
+  return fromNote ? Number(fromNote[1]) : null;
+}
+
+function hitSourceKey(c){
+  const s = String(c && c.source || '').toLowerCase();
+  if(/chronicling|newspaper/.test(s)) return 'loc';
+  if(/internet archive/.test(s)) return 'ia';
+  if(/smithsonian/.test(s)) return 'si';
+  if(/companion|familysearch/.test(s)) return 'companion';
+  return 'other';
+}
+
+function discoveryWantsChronology(filters){
+  filters = filters || discoveryFiltersFromForm();
+  return filters.sort === 'oldest' || filters.sort === 'newest'
+    || filters.yearFrom != null || filters.yearTo != null;
+}
+
+function filterAndSortHits(hits, filters){
+  filters = filters || discoveryFiltersFromForm();
+  const src = filters.sources || {};
+  let list = (hits || []).filter(c => {
+    const key = hitSourceKey(c);
+    if(key === 'loc' && src.loc === false) return false;
+    if(key === 'ia' && src.ia === false) return false;
+    if(key === 'si' && src.si === false) return false;
+    const y = hitYearNum(c);
+    if(filters.yearFrom != null && y != null && y < filters.yearFrom) return false;
+    if(filters.yearTo != null && y != null && y > filters.yearTo) return false;
+    // Keep undated hits unless a year filter is active and we require dates
+    if((filters.yearFrom != null || filters.yearTo != null) && y == null
+      && (filters.sort === 'oldest' || filters.sort === 'newest')){
+      return true; // undated sink to end after sort
+    }
+    if((filters.yearFrom != null || filters.yearTo != null) && y == null) return false;
+    return true;
+  });
+  if(filters.sort === 'oldest' || filters.sort === 'newest'){
+    const dir = filters.sort === 'oldest' ? 1 : -1;
+    list = list.slice().sort((a, b) => {
+      const ya = hitYearNum(a);
+      const yb = hitYearNum(b);
+      if(ya == null && yb == null) return 0;
+      if(ya == null) return 1;
+      if(yb == null) return -1;
+      if(ya !== yb) return (ya - yb) * dir;
+      return String(a.label || '').localeCompare(String(b.label || ''));
+    });
+  }
+  return list;
+}
+
+function resultCardFromCache(idx){
+  const c = RESULT_CACHE[idx];
+  if(!c) return '';
+  hydrateHitExcerpt(c);
+  const ctx = (typeof LAST_DISCOVERY_CTX !== 'undefined' && LAST_DISCOVERY_CTX) || {};
+  const interpretFn = typeof interpretHitHtmlWithLlm === 'function'
+    ? interpretHitHtmlWithLlm
+    : (typeof interpretHitHtml === 'function' ? interpretHitHtml : null);
+  const interpret = interpretFn ? interpretFn(c, ctx, { idx }) : '';
+  const year = hitYearNum(c);
+  return `<div class="result-card" data-cache-idx="${idx}">
+    <div class="result-left">
+      ${c.source?`<div class="source-tag">${esc(c.source)}${year != null ? ' · ' + year : ''}</div>`:''}
+      <div class="result-label">${esc(c.label)}</div>
+      <div class="result-note">${esc(c.note||'')}</div>
+      ${interpret}
+      <div class="result-url">${esc(c.url)}</div>
+    </div>
+    <div class="result-actions">
+      ${c.preview?`<button class="btn btn-small" data-preview-idx="${idx}">Preview</button>`:''}
+      <a class="btn ${c.preview?'btn-ghost ':''}btn-small" href="${esc(c.url)}" target="_blank" rel="noopener">Open</a>
+      <button class="btn btn-ghost btn-small" data-log-idx="${idx}">+ Log</button>
+    </div>
+  </div>`;
+}
+
+function applyDiscoveryFilters(){
+  const filters = discoveryFiltersFromForm();
+  if(LAST_DISCOVERY_CTX){
+    LAST_DISCOVERY_CTX.filters = filters;
+    LAST_DISCOVERY_CTX.sort = filters.sort;
+  }
+  const bySource = document.getElementById('liveBySource');
+  const hitsEl = document.getElementById('liveHits');
+  if(!bySource && !hitsEl) return filters;
+
+  const chronological = discoveryWantsChronology(filters);
+  if(chronological && hitsEl){
+    bySource && bySource.classList.add('hidden-sources');
+    hitsEl.classList.remove('hidden-hits');
+    const indexed = RESULT_CACHE.map((c, idx) => Object.assign({ _idx: idx }, c))
+      .filter(c => {
+        const key = hitSourceKey(c);
+        return key === 'loc' || key === 'ia' || key === 'si' || key === 'companion';
+      });
+    const sorted = filterAndSortHits(indexed, filters);
+    const label = filters.sort === 'newest' ? 'Newest first'
+      : filters.sort === 'oldest' ? 'Oldest first'
+      : 'Filtered';
+    const yearBits = [
+      filters.yearFrom != null ? String(filters.yearFrom) : '',
+      filters.yearTo != null ? String(filters.yearTo) : ''
+    ].filter(Boolean);
+    hitsEl.innerHTML = `
+      <p class="discovery-filter-meta">${esc(label)}${yearBits.length ? ' · ' + esc(yearBits.join('–')) : ''}
+        · ${sorted.length} hit${sorted.length === 1 ? '' : 's'}
+        ${RESULT_CACHE.length && !sorted.length ? ' (none match these filters)' : ''}</p>
+      ${sorted.length
+        ? sorted.map(c => resultCardFromCache(c._idx)).join('')
+        : `<div class="empty"><p>No live hits match these filters yet${RESULT_CACHE.length ? '' : ' — run a search first'}.</p></div>`}
+    `;
+  } else {
+    hitsEl && hitsEl.classList.add('hidden-hits');
+    bySource && bySource.classList.remove('hidden-sources');
+    const map = { loc: 'liveLoc', ia: 'liveIa', si: 'liveSmithsonian' };
+    Object.keys(map).forEach(key => {
+      const el = document.getElementById(map[key]);
+      if(!el) return;
+      if(filters.sources[key] === false) el.setAttribute('hidden', '');
+      else el.removeAttribute('hidden');
+    });
+  }
+  if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
+  return filters;
+}
+
+function discoveryEraFromFilters(filters, person, mode){
+  filters = filters || discoveryFiltersFromForm();
+  if(filters.yearFrom != null || filters.yearTo != null){
+    return {
+      start: filters.yearFrom != null ? filters.yearFrom : 1789,
+      end: filters.yearTo != null ? filters.yearTo : 1900
+    };
+  }
+  if(mode === 'earliest'){
+    return earliestEra(person);
+  }
+  // Sort alone reorders whatever the archives return — no forced date window
+  return null;
+}
 function fillDiscoveryForm(ctx){
   if(!ctx) return;
   if(ctx.givenName !== undefined) document.getElementById('tkGiven').value = ctx.givenName || '';
@@ -1686,6 +1862,7 @@ async function searchSmithsonian(container, ctx){
     if(rows.length===0){
       updateLiveSummary('Smithsonian', '0');
       container.innerHTML = emptyResultCard("No Smithsonian results. Try dropping the place, or search just the surname.");
+      if(typeof applyDiscoveryFilters === 'function') applyDiscoveryFilters();
       if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
       return;
     }
@@ -1701,6 +1878,7 @@ async function searchSmithsonian(container, ctx){
       const img = media.length ? String(media[0].thumbnail || media[0].content || '') : '';
       const preview = /^https?:\/\//.test(img) ? { kind: 'image', sizes: [img], initial: 0 } : null;
       const excerptNorm = typeof normalizeExcerpt === 'function' ? normalizeExcerpt(ft) : { text: ft || '', truncated: false };
+      // SI rarely has a clean year — leave undefined so chronology sorts undated last
       return resultCard({
         label: title,
         note,
@@ -1712,6 +1890,7 @@ async function searchSmithsonian(container, ctx){
         excerptTruncated: excerptNorm.truncated || undefined
       });
     }).join('');
+    if(typeof applyDiscoveryFilters === 'function') applyDiscoveryFilters();
     if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   }catch(e){
     updateLiveSummary('Smithsonian', 'error', 'err');
@@ -1746,7 +1925,9 @@ async function searchLOC(container, ctx){
   const name = [ctx.givenName, ctx.surname].filter(Boolean).join(' ') || ctx.surname;
   let url = 'https://www.loc.gov/collections/chronicling-america/?q=' + encodeURIComponent(name) + '&fo=json&c=6';
   if(ctx.state && isUs(ctx)) url += '&fa=' + encodeURIComponent('location:' + ctx.state.toLowerCase());
-  if(ctx.era) url += '&dates=' + ctx.era.start + '/' + ctx.era.end + '&sort=date';
+  if(ctx.era) url += '&dates=' + ctx.era.start + '/' + ctx.era.end;
+  if(ctx.sort === 'newest') url += '&sort=date_desc';
+  else if(ctx.era || ctx.sort === 'oldest') url += '&sort=date';
   try{
     const ctrl = new AbortController();
     const timer = setTimeout(()=>ctrl.abort(), 15000);
@@ -1759,6 +1940,7 @@ async function searchLOC(container, ctx){
     if(rows.length===0){
       updateLiveSummary('Newspapers', '0');
       container.innerHTML = emptyResultCard('No newspaper pages matched. Try dropping the given name, or search a variant spelling.');
+      if(typeof applyDiscoveryFilters === 'function') applyDiscoveryFilters();
       if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
       return;
     }
@@ -1777,6 +1959,7 @@ async function searchLOC(container, ctx){
         preview: locPreviewFromResult(r)
       });
     }).join('');
+    if(typeof applyDiscoveryFilters === 'function') applyDiscoveryFilters();
     if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   }catch(e){
     updateLiveSummary('Newspapers', 'error', 'err');
@@ -1807,9 +1990,12 @@ async function searchInternetArchive(container, ctx){
   container.innerHTML = loadingCard('Searching Internet Archive local histories…');
   const q = placeTerm + ' AND mediatype:texts'
     + (ctx.era ? ' AND year:[' + ctx.era.start + ' TO ' + ctx.era.end + ']' : '');
+  let sortParam = '';
+  if(ctx.sort === 'newest') sortParam = '&sort[]=year+desc';
+  else if(ctx.era || ctx.sort === 'oldest') sortParam = '&sort[]=year+asc';
   const url = 'https://archive.org/advancedsearch.php?q=' + encodeURIComponent(q)
     + '&fl[]=identifier&fl[]=title&fl[]=year&rows=6&page=1&output=json'
-    + (ctx.era ? '&sort[]=year+asc' : '');
+    + sortParam;
   try{
     const ctrl = new AbortController();
     const timer = setTimeout(()=>ctrl.abort(), 15000);
@@ -1822,6 +2008,7 @@ async function searchInternetArchive(container, ctx){
     if(docs.length===0){
       updateLiveSummary('Internet Archive', '0');
       container.innerHTML = emptyResultCard('No Internet Archive texts matched this place — try the county seat or a neighboring county.');
+      if(typeof applyDiscoveryFilters === 'function') applyDiscoveryFilters();
       if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
       return;
     }
@@ -1835,6 +2022,7 @@ async function searchInternetArchive(container, ctx){
       year: d.year || undefined,
       preview: { kind: 'iframe', src: 'https://archive.org/embed/' + encodeURIComponent(d.identifier) }
     })).join('');
+    if(typeof applyDiscoveryFilters === 'function') applyDiscoveryFilters();
     if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   }catch(e){
     updateLiveSummary('Internet Archive', 'error', 'err');
@@ -1908,6 +2096,17 @@ function renderQuickLinks(container, ctx){
 
 // ---------- run everything ----------
 function runEarliestDiscovery(){
+  const sortEl = document.getElementById('tkSort');
+  if(sortEl) sortEl.value = 'oldest';
+  const session = typeof activeSession === 'function' ? activeSession() : null;
+  const person = session && session.personId
+    ? STATE.people.find(p => p.id === session.personId)
+    : null;
+  const era = earliestEra(person);
+  const yFrom = document.getElementById('tkYearFrom');
+  const yTo = document.getElementById('tkYearTo');
+  if(yFrom) yFrom.value = String(era.start);
+  if(yTo) yTo.value = String(era.end);
   runDiscovery('', 'earliest');
 }
 // The searched surname doubling as an enslaver-candidate surname is
@@ -1969,29 +2168,43 @@ function runDiscovery(forPersonId, mode){
     renderChecklist();
   }
   LIVE_COUNTS = {};
+  const filters = discoveryFiltersFromForm();
   LAST_DISCOVERY_CTX = ctx;
+  ctx.filters = filters;
+  ctx.sort = filters.sort;
   const session = getOrCreateSession(ctx, typeof forPersonId === 'string' ? forPersonId : '');
   saveData();
-  // era-bounded, oldest-first mode; the window narrows to the session
-  // person's plausible record trail when the search is theirs
-  ctx.era = mode === 'earliest'
-    ? earliestEra(STATE.people.find(p=>p.id===session.personId))
-    : null;
+  // Date window: explicit year filters, earliest shortcut, or chronological sort
+  const person = STATE.people.find(p => p.id === session.personId);
+  ctx.era = discoveryEraFromFilters(filters, person, mode);
+  if(mode === 'earliest' && (!filters.yearFrom && !filters.yearTo)){
+    // Ensure form reflects the era we searched
+    const yFrom = document.getElementById('tkYearFrom');
+    const yTo = document.getElementById('tkYearTo');
+    if(yFrom && ctx.era) yFrom.value = String(ctx.era.start);
+    if(yTo && ctx.era) yTo.value = String(ctx.era.end);
+  }
 
   const placeLabel = ctx.state || 'any place';
   const nameLabel = [ctx.givenName, ctx.surname].filter(Boolean).join(' ');
+  const sortLabel = filters.sort === 'oldest' ? 'oldest first'
+    : filters.sort === 'newest' ? 'newest first' : '';
+  const yearLabel = ctx.era ? (ctx.era.start + '–' + ctx.era.end) : '';
   results.innerHTML = `
     ${session.personId && typeof coachBannerHtml === 'function' ? coachBannerHtml(session.personId) : ''}
-    <div class="discovery-summary">Searching <strong>${esc(nameLabel)}</strong> in <strong>${esc(placeLabel)}</strong>${ctx.variants ? ' · variants: ' + esc(normalizeVariants(ctx.variants).join(', ')) : ''}${ctx.era ? ' · <strong>earliest mentions ' + ctx.era.start + '–' + ctx.era.end + '</strong>' : ''}</div>
+    <div class="discovery-summary">Searching <strong>${esc(nameLabel)}</strong> in <strong>${esc(placeLabel)}</strong>${ctx.variants ? ' · variants: ' + esc(normalizeVariants(ctx.variants).join(', ')) : ''}${yearLabel ? ' · <strong>' + (mode === 'earliest' ? 'earliest mentions ' : '') + esc(yearLabel) + '</strong>' : ''}${sortLabel ? ' · ' + esc(sortLabel) : ''}</div>
     <div id="sessionSummary"></div>
-    ${ctx.era ? earliestExplainer(ctx, session) : ''}
+    ${mode === 'earliest' || filters.sort === 'oldest' ? earliestExplainer(ctx, session) : ''}
     <div class="result-section">
-      <div class="result-section-title">${ctx.era ? 'Earliest dated mentions' : 'Live results'}</div>
+      <div class="result-section-title">${mode === 'earliest' || filters.sort === 'oldest' ? 'Earliest dated mentions' : filters.sort === 'newest' ? 'Newest dated mentions' : 'Live results'}</div>
       <div class="live-summary" id="liveSummary"></div>
       <div class="result-grid" id="liveResults">
-        <div class="live-source" id="liveLoc"></div>
-        <div class="live-source" id="liveIa"></div>
-        <div class="live-source" id="liveSmithsonian"></div>
+        <div id="liveBySource">
+          <div class="live-source" id="liveLoc"></div>
+          <div class="live-source" id="liveIa"></div>
+          <div class="live-source" id="liveSmithsonian"></div>
+        </div>
+        <div id="liveHits" class="hidden-hits"></div>
       </div>
     </div>
     <div id="quickLinks"></div>
@@ -2002,14 +2215,21 @@ function runDiscovery(forPersonId, mode){
 
   renderQuickLinks(document.getElementById('quickLinks'), ctx);
   renderSessionSummary();
+  applyDiscoveryFilters();
   if(typeof refreshHitInsightPanel === 'function') refreshHitInsightPanel();
   if(ctx.enslaver){
     document.getElementById('strategyArea').innerHTML = strategyCard(ctx.enslaver, ctx.county, ctx.state);
   }
   // keyless sources first, so an unconfigured user still sees real hits
-  searchLOC(document.getElementById('liveLoc'), ctx);
-  searchInternetArchive(document.getElementById('liveIa'), ctx);
-  searchSmithsonian(document.getElementById('liveSmithsonian'), ctx);
+  const locEl = document.getElementById('liveLoc');
+  const iaEl = document.getElementById('liveIa');
+  const siEl = document.getElementById('liveSmithsonian');
+  if(filters.sources.loc !== false) searchLOC(locEl, ctx);
+  else if(locEl) locEl.innerHTML = '';
+  if(filters.sources.ia !== false) searchInternetArchive(iaEl, ctx);
+  else if(iaEl) iaEl.innerHTML = '';
+  if(filters.sources.si !== false) searchSmithsonian(siEl, ctx);
+  else if(siEl) siEl.innerHTML = '';
 }
 
 function syncLogConfidence(status){

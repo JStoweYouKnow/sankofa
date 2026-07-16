@@ -171,13 +171,40 @@
           <label for="tkCity">City / town</label>
           <input id="tkCity" type="text" placeholder="e.g. Belmont">
         </div>
+        <div class="field full discovery-filters" id="discoveryFilters">
+          <div class="discovery-filters-row">
+            <div class="field">
+              <label for="tkSort">Sort live results</label>
+              <select id="tkSort" onchange="applyDiscoveryFilters()">
+                <option value="relevance">By source (default)</option>
+                <option value="oldest">Chronological — oldest first</option>
+                <option value="newest">Chronological — newest first</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="tkYearFrom">Year from</label>
+              <input id="tkYearFrom" type="number" inputmode="numeric" min="1600" max="2000" placeholder="e.g. 1840" onchange="applyDiscoveryFilters()">
+            </div>
+            <div class="field">
+              <label for="tkYearTo">Year to</label>
+              <input id="tkYearTo" type="number" inputmode="numeric" min="1600" max="2000" placeholder="e.g. 1877" onchange="applyDiscoveryFilters()">
+            </div>
+          </div>
+          <div class="discovery-source-filters" role="group" aria-label="Live sources">
+            <span class="discovery-filter-label">Show</span>
+            <label class="inline-check"><input type="checkbox" id="tkSrcLoc" checked onchange="applyDiscoveryFilters()"> Newspapers</label>
+            <label class="inline-check"><input type="checkbox" id="tkSrcIa" checked onchange="applyDiscoveryFilters()"> Internet Archive</label>
+            <label class="inline-check"><input type="checkbox" id="tkSrcSi" checked onchange="applyDiscoveryFilters()"> Smithsonian</label>
+          </div>
+          <div class="field-hint">Year range narrows live archive queries when you Search. Sort and source checkboxes also reshuffle results already on the page — no re-search needed.</div>
+        </div>
         <div class="field full">
           <label for="tkEnslaver">Possible enslaver surname (optional)</label>
           <input id="tkEnslaver" type="text" placeholder="e.g. a local landowning family with the same or a related surname">
           <div class="field-hint">Before 1870 in the U.S., formerly enslaved people usually appear only under the enslaver's name in tax lists and slave schedules — not their own. In the British Caribbean, try the plantation owner in the 1817–1834 slave registers.</div>
         </div>
         <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px;">
-          <button class="btn btn-ghost" onclick="runEarliestDiscovery()" title="Same search, but date-bounded and sorted oldest-first — surfaces the earliest dated records of this surname in this place">Find earliest mentions</button>
+          <button class="btn btn-ghost" onclick="runEarliestDiscovery()" title="Sets sort to oldest-first, applies a Reconstruction-era date window, and searches">Find earliest mentions</button>
           <button class="btn" onclick="runDiscovery()">Search</button>
         </div>
       </div>
